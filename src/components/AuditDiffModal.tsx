@@ -57,7 +57,7 @@ export const AuditDiffModal: React.FC<AuditDiffModalProps> = ({
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
           
           {/* Summary Stat Cards */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div 
               onClick={() => setActiveTab('resolved')}
               className={`p-4 rounded-xl border cursor-pointer transition-all ${

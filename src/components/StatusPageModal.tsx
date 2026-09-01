@@ -108,7 +108,7 @@ export const StatusPageModal: React.FC<StatusPageModalProps> = ({ isOpen, onClos
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mt-3 text-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3 text-center">
             <div className="p-3 bg-white rounded-xl border border-slate-200">
               <span className="text-[10px] font-mono text-slate-400 uppercase tracking-wider block">Scan Latency</span>
               <span className="text-base font-extrabold text-slate-900 font-mono">18ms</span>

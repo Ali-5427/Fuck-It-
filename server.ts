@@ -168,6 +168,13 @@ export function createServerApp() {
   // 7. Screenshots Validator
   app.post('/api/screenshots/validate', (req: Request, res: Response) => {
     const { width, height, fileName } = req.body;
+
+    if (typeof width !== 'number' || typeof height !== 'number' || isNaN(width) || isNaN(height)) {
+      return res.status(400).json({ 
+        error: 'Invalid screenshot dimensions. Both width and height must be valid numbers.' 
+      });
+    }
+
     const issues: string[] = [];
     const warnings: string[] = [];
     let matchedDevice = 'Unknown';

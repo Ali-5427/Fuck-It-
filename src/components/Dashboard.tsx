@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Plus, 
   Smartphone, 
@@ -61,45 +61,64 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  // Calculations for stats
-  const totalApps = apps.length;
-  let totalAudits = 0;
-  let totalHighRisk = 0;
-  let totalFixed = 0;
-  let totalScoreSum = 0;
-  let appsWithAuditsCount = 0;
+  // Calculations for stats and recent audits via useMemo
+  const {
+    totalApps,
+    totalAudits,
+    totalHighRisk,
+    totalFixed,
+    recentAudits,
+    averageReadiness
+  } = useMemo(() => {
+    const totalApps = apps.length;
+    let totalAudits = 0;
+    let totalHighRisk = 0;
+    let totalFixed = 0;
+    let totalScoreSum = 0;
+    let appsWithAuditsCount = 0;
 
-  const allAudits: { app: Application; audit: AuditRun }[] = [];
-  apps.forEach(app => {
-    const audits = store.getAudits(app.id);
-    totalAudits += audits.length;
-    audits.forEach(audit => {
-      allAudits.push({ app, audit });
-    });
-    
-    const latestAudit = store.getLatestAudit(app.id);
-    if (latestAudit) {
-      const score = calculateReadinessScore(latestAudit);
-      totalScoreSum += score;
-      appsWithAuditsCount++;
+    const allAudits: { app: Application; audit: AuditRun }[] = [];
+    apps.forEach(app => {
+      const audits = store.getAudits(app.id);
+      totalAudits += audits.length;
+      audits.forEach(audit => {
+        allAudits.push({ app, audit });
+      });
       
-      const openFindings = latestAudit.findings.filter(f => f.status !== 'FIXED');
-      totalHighRisk += openFindings.filter(f => f.severity === 'HIGH').length;
-      totalFixed += latestAudit.findings.filter(f => f.status === 'FIXED').length;
-    }
-  });
+      const latestAudit = store.getLatestAudit(app.id);
+      if (latestAudit) {
+        const score = calculateReadinessScore(latestAudit);
+        totalScoreSum += score;
+        appsWithAuditsCount++;
+        
+        const openFindings = latestAudit.findings.filter(f => f.status !== 'FIXED');
+        totalHighRisk += openFindings.filter(f => f.severity === 'HIGH').length;
+        totalFixed += latestAudit.findings.filter(f => f.status === 'FIXED').length;
+      }
+    });
 
-  // Sort recent checks by date descending
-  allAudits.sort((a, b) => new Date(b.audit.createdAt).getTime() - new Date(a.audit.createdAt).getTime());
-  const recentAudits = allAudits.slice(0, 5);
+    allAudits.sort((a, b) => new Date(b.audit.createdAt).getTime() - new Date(a.audit.createdAt).getTime());
+    const recentAudits = allAudits.slice(0, 5);
+    const averageReadiness = appsWithAuditsCount > 0 ? Math.round(totalScoreSum / appsWithAuditsCount) : 100;
 
-  const averageReadiness = appsWithAuditsCount > 0 ? Math.round(totalScoreSum / appsWithAuditsCount) : 100;
+    return {
+      totalApps,
+      totalAudits,
+      totalHighRisk,
+      totalFixed,
+      recentAudits,
+      averageReadiness
+    };
+  }, [apps]);
 
-  // Filtered Apps list
-  const filteredApps = apps.filter(app => 
-    app.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    app.bundleId.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Filtered Apps list via useMemo
+  const filteredApps = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    return apps.filter(app => 
+      app.name.toLowerCase().includes(query) ||
+      app.bundleId.toLowerCase().includes(query)
+    );
+  }, [apps, searchQuery]);
 
   return (
     <div className="w-full h-full bg-slate-50/50 flex flex-col p-6 overflow-hidden">

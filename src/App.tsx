@@ -1,30 +1,39 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { LandingPage } from './components/LandingPage';
 import { Dashboard } from './components/Dashboard';
 import { AuditView } from './components/AuditView';
-import { RejectionAnalyzer } from './components/RejectionAnalyzer';
-import { MetadataChecker } from './components/MetadataChecker';
-import { ScreenshotValidator } from './components/ScreenshotValidator';
-import { AdminPanel } from './components/AdminPanel';
-import { PrivacySecurityView } from './components/PrivacySecurityView';
-import { UploadModal } from './components/UploadModal';
-import { FindingDetailModal } from './components/FindingDetailModal';
-import { AuditDiffModal } from './components/AuditDiffModal';
-import { SubmissionReportModal } from './components/SubmissionReportModal';
-import { AuthModal } from './components/AuthModal';
-import { AccountModal } from './components/AccountModal';
-import { ReviewChecklist } from './components/ReviewChecklist';
-import { PrivacyStringsModal } from './components/PrivacyStringsModal';
-import { StatusPageModal } from './components/StatusPageModal';
-import { SupportModal } from './components/SupportModal';
 import { SiteFooter } from './components/SiteFooter';
+
+// Lazy-loaded secondary views & modals
+const RejectionAnalyzer = lazy(() => import('./components/RejectionAnalyzer').then(m => ({ default: m.RejectionAnalyzer })));
+const MetadataChecker = lazy(() => import('./components/MetadataChecker').then(m => ({ default: m.MetadataChecker })));
+const ScreenshotValidator = lazy(() => import('./components/ScreenshotValidator').then(m => ({ default: m.ScreenshotValidator })));
+const AdminPanel = lazy(() => import('./components/AdminPanel').then(m => ({ default: m.AdminPanel })));
+const PrivacySecurityView = lazy(() => import('./components/PrivacySecurityView').then(m => ({ default: m.PrivacySecurityView })));
+const UploadModal = lazy(() => import('./components/UploadModal').then(m => ({ default: m.UploadModal })));
+const FindingDetailModal = lazy(() => import('./components/FindingDetailModal').then(m => ({ default: m.FindingDetailModal })));
+const AuditDiffModal = lazy(() => import('./components/AuditDiffModal').then(m => ({ default: m.AuditDiffModal })));
+const SubmissionReportModal = lazy(() => import('./components/SubmissionReportModal').then(m => ({ default: m.SubmissionReportModal })));
+const AuthModal = lazy(() => import('./components/AuthModal').then(m => ({ default: m.AuthModal })));
+const AccountModal = lazy(() => import('./components/AccountModal').then(m => ({ default: m.AccountModal })));
+const ReviewChecklist = lazy(() => import('./components/ReviewChecklist').then(m => ({ default: m.ReviewChecklist })));
+const PrivacyStringsModal = lazy(() => import('./components/PrivacyStringsModal').then(m => ({ default: m.PrivacyStringsModal })));
+const StatusPageModal = lazy(() => import('./components/StatusPageModal').then(m => ({ default: m.StatusPageModal })));
+const SupportModal = lazy(() => import('./components/SupportModal').then(m => ({ default: m.SupportModal })));
 
 import { store } from './services/store';
 import { apiClient } from './services/api';
 import { Application, AuditRun, Finding, SubmissionReport, AuditComparison } from './types';
 import { ShieldCheck, Sparkles, Loader2 } from 'lucide-react';
+
+const ViewLoadingFallback = () => (
+  <div className="flex items-center justify-center p-12 text-xs text-slate-500 font-mono">
+    <Loader2 className="h-5 w-5 text-blue-600 animate-spin mr-2" />
+    <span>Loading module...</span>
+  </div>
+);
 
 export default function App() {
   const [, setTick] = useState(0);
@@ -274,27 +283,39 @@ export default function App() {
             )}
 
             {currentView === 'rejection' && (
-              <RejectionAnalyzer />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <RejectionAnalyzer />
+              </Suspense>
             )}
 
             {currentView === 'metadata' && (
-              <MetadataChecker />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <MetadataChecker />
+              </Suspense>
             )}
 
             {currentView === 'screenshots' && (
-              <ScreenshotValidator />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <ScreenshotValidator />
+              </Suspense>
             )}
 
             {currentView === 'admin' && isAdminUser && (
-              <AdminPanel />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <AdminPanel />
+              </Suspense>
             )}
 
             {currentView === 'privacy' && (
-              <PrivacySecurityView />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <PrivacySecurityView />
+              </Suspense>
             )}
 
             {currentView === 'checklist' && (
-              <ReviewChecklist />
+              <Suspense fallback={<ViewLoadingFallback />}>
+                <ReviewChecklist />
+              </Suspense>
             )}
           </main>
 
@@ -302,63 +323,88 @@ export default function App() {
         </div>
 
         {/* Modals */}
-        <UploadModal
-          isOpen={uploadModalOpen}
-          onClose={() => setUploadModalOpen(false)}
-          onAuditCompleted={handleAuditCompleted}
-        />
+        <Suspense fallback={null}>
+        {uploadModalOpen && (
+          <UploadModal
+            isOpen={uploadModalOpen}
+            onClose={() => setUploadModalOpen(false)}
+            onAuditCompleted={handleAuditCompleted}
+          />
+        )}
 
-        <FindingDetailModal
-          finding={selectedFinding}
-          appId={selectedApp?.id || ''}
-          auditId={activeAudit?.id || ''}
-          currentBuild={selectedApp?.currentBuild || '1'}
-          onClose={() => setSelectedFinding(null)}
-        />
+        {selectedFinding && (
+          <FindingDetailModal
+            finding={selectedFinding}
+            appId={selectedApp?.id || ''}
+            auditId={activeAudit?.id || ''}
+            currentBuild={selectedApp?.currentBuild || '1'}
+            onClose={() => setSelectedFinding(null)}
+          />
+        )}
 
-        <AuditDiffModal
-          comparison={activeDiffComparison}
-          appName={selectedApp?.name || 'Application'}
-          onClose={() => setActiveDiffComparison(null)}
-        />
+        {activeDiffComparison && (
+          <AuditDiffModal
+            comparison={activeDiffComparison}
+            appName={selectedApp?.name || 'Application'}
+            onClose={() => setActiveDiffComparison(null)}
+          />
+        )}
 
-        <SubmissionReportModal
-          report={submissionReport}
-          onClose={() => setSubmissionReport(null)}
-        />
+        {submissionReport && (
+          <SubmissionReportModal
+            report={submissionReport}
+            onClose={() => setSubmissionReport(null)}
+          />
+        )}
 
-        <AuthModal
-          isOpen={authModalOpen}
-          onClose={() => setAuthModalOpen(false)}
-          initialMode={authModalMode}
-          initialTier={authModalTier}
-          onSuccess={() => setCurrentView('dashboard')}
-        />
+        {authModalOpen && (
+          <AuthModal
+            isOpen={authModalOpen}
+            onClose={() => setAuthModalOpen(false)}
+            initialMode={authModalMode}
+            initialTier={authModalTier}
+            onSuccess={() => setCurrentView('dashboard')}
+          />
+        )}
 
-        <AccountModal
-          isOpen={accountModalOpen}
-          onClose={() => setAccountModalOpen(false)}
-          user={user}
-          onOpenAuth={() => handleOpenAuth('login')}
-          onAuditApp={handleConnectAuditCompleted}
-        />
+        {accountModalOpen && (
+          <AccountModal
+            isOpen={accountModalOpen}
+            onClose={() => setAccountModalOpen(false)}
+            user={user}
+            onOpenAuth={() => handleOpenAuth('login')}
+            onAuditApp={handleConnectAuditCompleted}
+          />
+        )}
 
+        {checklistModalOpen && (
+          <ReviewChecklist
+            isOpen={checklistModalOpen}
+            onClose={() => setChecklistModalOpen(false)}
+          />
+        )}
 
+        {privacyStringsModalOpen && (
+          <PrivacyStringsModal
+            isOpen={privacyStringsModalOpen}
+            onClose={() => setPrivacyStringsModalOpen(false)}
+          />
+        )}
 
-        <PrivacyStringsModal
-          isOpen={privacyStringsModalOpen}
-          onClose={() => setPrivacyStringsModalOpen(false)}
-        />
+        {statusModalOpen && (
+          <StatusPageModal
+            isOpen={statusModalOpen}
+            onClose={() => setStatusModalOpen(false)}
+          />
+        )}
 
-        <StatusPageModal
-          isOpen={statusModalOpen}
-          onClose={() => setStatusModalOpen(false)}
-        />
-
-        <SupportModal
-          isOpen={supportModalOpen}
-          onClose={() => setSupportModalOpen(false)}
-        />
+        {supportModalOpen && (
+          <SupportModal
+            isOpen={supportModalOpen}
+            onClose={() => setSupportModalOpen(false)}
+          />
+        )}
+        </Suspense>
       </div>
     );
   }
@@ -429,21 +475,27 @@ export default function App() {
           />
         </main>
 
-        <FindingDetailModal
-          finding={selectedFinding}
-          appId={tryNowResult?.app?.id || ''}
-          auditId={tryNowResult?.audit?.id || ''}
-          currentBuild="1"
-          onClose={() => setSelectedFinding(null)}
-        />
+        <Suspense fallback={null}>
+          {selectedFinding && (
+            <FindingDetailModal
+              finding={selectedFinding}
+              appId={tryNowResult?.app?.id || ''}
+              auditId={tryNowResult?.audit?.id || ''}
+              currentBuild="1"
+              onClose={() => setSelectedFinding(null)}
+            />
+          )}
 
-        <AuthModal
-          isOpen={authModalOpen}
-          onClose={() => setAuthModalOpen(false)}
-          initialMode={authModalMode}
-          initialTier={authModalTier}
-          onSuccess={() => setCurrentView('dashboard')}
-        />
+          {authModalOpen && (
+            <AuthModal
+              isOpen={authModalOpen}
+              onClose={() => setAuthModalOpen(false)}
+              initialMode={authModalMode}
+              initialTier={authModalTier}
+              onSuccess={() => setCurrentView('dashboard')}
+            />
+          )}
+        </Suspense>
       </div>
     );
   }
@@ -482,47 +534,63 @@ export default function App() {
       </main>
 
       {/* Modals */}
-      <UploadModal
-        isOpen={uploadModalOpen}
-        onClose={() => setUploadModalOpen(false)}
-        onAuditCompleted={handleAuditCompleted}
-      />
+      <Suspense fallback={null}>
+        {uploadModalOpen && (
+          <UploadModal
+            isOpen={uploadModalOpen}
+            onClose={() => setUploadModalOpen(false)}
+            onAuditCompleted={handleAuditCompleted}
+          />
+        )}
 
-      <AuthModal
-        isOpen={authModalOpen}
-        onClose={() => setAuthModalOpen(false)}
-        initialMode={authModalMode}
-        initialTier={authModalTier}
-        onSuccess={() => setCurrentView('dashboard')}
-      />
+        {authModalOpen && (
+          <AuthModal
+            isOpen={authModalOpen}
+            onClose={() => setAuthModalOpen(false)}
+            initialMode={authModalMode}
+            initialTier={authModalTier}
+            onSuccess={() => setCurrentView('dashboard')}
+          />
+        )}
 
-      <AccountModal
-        isOpen={accountModalOpen}
-        onClose={() => setAccountModalOpen(false)}
-        user={user}
-        onOpenAuth={() => handleOpenAuth('login')}
-        onAuditApp={handleConnectAuditCompleted}
-      />
+        {accountModalOpen && (
+          <AccountModal
+            isOpen={accountModalOpen}
+            onClose={() => setAccountModalOpen(false)}
+            user={user}
+            onOpenAuth={() => handleOpenAuth('login')}
+            onAuditApp={handleConnectAuditCompleted}
+          />
+        )}
 
-      <ReviewChecklist
-        isOpen={checklistModalOpen}
-        onClose={() => setChecklistModalOpen(false)}
-      />
+        {checklistModalOpen && (
+          <ReviewChecklist
+            isOpen={checklistModalOpen}
+            onClose={() => setChecklistModalOpen(false)}
+          />
+        )}
 
-      <PrivacyStringsModal
-        isOpen={privacyStringsModalOpen}
-        onClose={() => setPrivacyStringsModalOpen(false)}
-      />
+        {privacyStringsModalOpen && (
+          <PrivacyStringsModal
+            isOpen={privacyStringsModalOpen}
+            onClose={() => setPrivacyStringsModalOpen(false)}
+          />
+        )}
 
-      <StatusPageModal
-        isOpen={statusModalOpen}
-        onClose={() => setStatusModalOpen(false)}
-      />
+        {statusModalOpen && (
+          <StatusPageModal
+            isOpen={statusModalOpen}
+            onClose={() => setStatusModalOpen(false)}
+          />
+        )}
 
-      <SupportModal
-        isOpen={supportModalOpen}
-        onClose={() => setSupportModalOpen(false)}
-      />
+        {supportModalOpen && (
+          <SupportModal
+            isOpen={supportModalOpen}
+            onClose={() => setSupportModalOpen(false)}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }
