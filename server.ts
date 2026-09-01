@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { createServer as createViteServer } from 'vite';
 import { 
   enhanceAuditWithAI, 
   analyzeAppleRejectionWithAI, 
@@ -17,6 +18,7 @@ import {
   generateAppStoreConnectJWT, 
   fetchAppsFromConnect, 
   fetchAppDetails, 
+  testAppStoreConnectCredentials,
   encryptKey, 
   decryptKey 
 } from './src/server/appStoreConnect.js';
@@ -292,6 +294,11 @@ export function createServerApp() {
     }
   };
 
+  // Helper for Connect Encryption Secret
+  const getConnectSecret = () => {
+    return process.env.CONNECT_KEY_ENCRYPTION_SECRET || process.env.VITE_INSFORGE_ANON_KEY || 'fixit_appstoreconnect_secret_salt_2026';
+  };
+
   // App Store Connect APIs
   app.post('/api/connect/save-key', userAuthMiddleware, connectRateLimiter, async (req: Request, res: Response) => {
     const { issuerId, keyId, privateKeyPem } = req.body;
@@ -299,15 +306,23 @@ export function createServerApp() {
       return res.status(400).json({ error: 'Issuer ID, Key ID, and Private Key (PEM) are required.' });
     }
 
-    const secret = process.env.CONNECT_KEY_ENCRYPTION_SECRET;
-    if (!secret) {
-      return res.status(500).json({ error: 'Server configuration error: Key encryption secret missing.' });
-    }
-
+    const secret = getConnectSecret();
     const user = (req as any).user;
     const token = (req as any).token;
 
     try {
+      // 1. Immediately verify credentials against Apple before saving
+      let testResult: { success: boolean; appCount: number };
+      try {
+        testResult = await testAppStoreConnectCredentials(issuerId, keyId, privateKeyPem);
+      } catch (authErr: any) {
+        console.error('Apple Connect auth verification failed:', authErr.message);
+        return res.status(400).json({ 
+          error: authErr.message || 'Apple authentication failed. Please verify your Issuer ID, Key ID, and .p8 private key file.' 
+        });
+      }
+
+      // 2. Encrypt PEM
       const encryptedPem = encryptKey(privateKeyPem, secret);
 
       const userClient = createClient({
@@ -317,38 +332,35 @@ export function createServerApp() {
       });
       userClient.setAuthToken(token);
 
-      // Clean existing key for user and save new
+      // 3. Clean existing key for user and save verified key
       await userClient.database.from('app_store_connect_keys').delete().eq('user_id', user.id);
       const { error } = await userClient.database.from('app_store_connect_keys').insert([{
         user_id: user.id,
-        issuer_id: issuerId,
-        key_id: keyId,
+        issuer_id: issuerId.trim(),
+        key_id: keyId.trim(),
         encrypted_pem: encryptedPem
       }]);
 
       if (error) {
-        console.error('[REDACTED] Error storing key:', error.message);
+        console.error('Error storing key:', error.message);
         return res.status(500).json({ error: 'Failed to save connection details to database.' });
       }
 
       res.json({
         success: true,
-        keyId,
-        issuerId,
-        maskedKey: `Key ending in ...${keyId.slice(-4)}`
+        keyId: keyId.trim(),
+        issuerId: issuerId.trim(),
+        appCount: testResult.appCount,
+        maskedKey: `Key ending in ...${keyId.trim().slice(-4)}`
       });
     } catch (err: any) {
-      console.error('[REDACTED] Save key error:', err.message);
-      res.status(500).json({ error: 'An unexpected error occurred while saving the key.' });
+      console.error('Save key error:', err.message);
+      res.status(500).json({ error: err.message || 'An unexpected error occurred while saving the key.' });
     }
   });
 
   app.post('/api/connect/list-apps', userAuthMiddleware, connectRateLimiter, async (req: Request, res: Response) => {
-    const secret = process.env.CONNECT_KEY_ENCRYPTION_SECRET;
-    if (!secret) {
-      return res.status(500).json({ error: 'Server configuration error: Key encryption secret missing.' });
-    }
-
+    const secret = getConnectSecret();
     const user = (req as any).user;
     const token = (req as any).token;
 
@@ -367,7 +379,7 @@ export function createServerApp() {
         .maybeSingle();
 
       if (error) {
-        console.error('[REDACTED] Fetch key failed:', error.message);
+        console.error('Fetch key failed:', error.message);
         return res.status(500).json({ error: 'Failed to read connection details.' });
       }
 
@@ -384,13 +396,14 @@ export function createServerApp() {
         maskedKey: `Key ending in ...${data.key_id.slice(-4)}`,
         apps: apps.map((a: any) => ({
           id: a.id,
-          name: a.attributes.name,
-          bundleId: a.attributes.bundleId,
-          sku: a.attributes.sku
+          name: a.attributes?.name || 'App',
+          bundleId: a.attributes?.bundleId || 'N/A',
+          sku: a.attributes?.sku || 'N/A',
+          primaryLocale: a.attributes?.primaryLocale || 'en-US'
         }))
       });
     } catch (err: any) {
-      console.error('[REDACTED] List apps error:', err.message);
+      console.error('List apps error:', err.message);
       res.status(500).json({ error: err.message || 'Failed to list apps from App Store Connect.' });
     }
   });
@@ -401,11 +414,7 @@ export function createServerApp() {
       return res.status(400).json({ error: 'appId parameter is required.' });
     }
 
-    const secret = process.env.CONNECT_KEY_ENCRYPTION_SECRET;
-    if (!secret) {
-      return res.status(500).json({ error: 'Server configuration error: Key encryption secret missing.' });
-    }
-
+    const secret = getConnectSecret();
     const user = (req as any).user;
     const token = (req as any).token;
 
@@ -424,7 +433,7 @@ export function createServerApp() {
         .maybeSingle();
 
       if (error || !data) {
-        return res.status(404).json({ error: 'App Store Connect credentials not found.' });
+        return res.status(404).json({ error: 'App Store Connect credentials not found. Please connect your key in Account Settings.' });
       }
 
       const decryptedPem = decryptKey(data.encrypted_pem, secret);
@@ -447,8 +456,8 @@ export function createServerApp() {
         auditRun
       });
     } catch (err: any) {
-      console.error('[REDACTED] Check app error:', err.message);
-      res.status(500).json({ error: err.message || 'Failed to check app details.' });
+      console.error('Check app error:', err.message);
+      res.status(500).json({ error: err.message || 'Failed to check app details from App Store Connect.' });
     }
   });
 
@@ -550,27 +559,33 @@ export function createServerApp() {
   return app;
 }
 
-export function startServer() {
-  if (!process.env.VITE_INSFORGE_BASE_URL || !process.env.VITE_INSFORGE_ANON_KEY) {
-    throw new Error('CRITICAL CONFIGURATION ERROR: Environment variables VITE_INSFORGE_BASE_URL and VITE_INSFORGE_ANON_KEY must be set.');
-  }
-  if (!process.env.CONNECT_KEY_ENCRYPTION_SECRET) {
-    throw new Error('CRITICAL CONFIGURATION ERROR: Environment variable CONNECT_KEY_ENCRYPTION_SECRET must be set for App Store Connect API encryption.');
-  }
+export async function startServer() {
   const app = createServerApp();
-  const PORT = process.env.PORT || 3000;
-  const distPath = path.resolve('dist');
-  app.use(express.static(distPath));
-  app.get('*', (req: Request, res: Response) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
+  const PORT = 3000;
 
-  app.listen(PORT, () => {
-    console.log(`Fixit server running on port ${PORT}`);
+  // Mount Vite middleware in development mode
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.resolve('dist');
+    app.use(express.static(distPath));
+    app.get('*', (req: Request, res: Response) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Fixit server running on http://localhost:${PORT}`);
   });
 }
 
 // Only start when run directly via node / tsx
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
-  startServer();
+  startServer().catch((err) => {
+    console.error('Failed to start server:', err);
+  });
 }

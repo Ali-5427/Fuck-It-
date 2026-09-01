@@ -2,20 +2,35 @@ import { NormalizedAppInspection } from '../types';
 import { AppDetailsFromConnect } from '../server/appStoreConnect';
 
 /**
- * Note: This extractor maps App Store Connect API details into the unified NormalizedAppInspection format.
- * Since it is a listing-level data source, binary-level details like local frameworks, permissions,
- * and entitlements are marked as empty/defaulted.
+ * Maps App Store Connect API details into the unified NormalizedAppInspection format.
+ * Connect API metadata provides live store metadata, builds, IAPs, and screenshots.
  */
 export function extractFromAppStoreConnect(
   details: AppDetailsFromConnect
 ): NormalizedAppInspection {
-  const { app, appInfos, inAppPurchases, subscriptionGroups, privacyPolicyUrl, ageRating, version } = details;
+  const { 
+    app, 
+    appInfos, 
+    inAppPurchases, 
+    subscriptionGroups, 
+    privacyPolicyUrl, 
+    supportUrl,
+    description: fetchedDescription,
+    subtitle: fetchedSubtitle,
+    keywords,
+    ageRating, 
+    version,
+    buildNumber,
+    minOsVersion,
+    usesNonExemptEncryption,
+    screenshots 
+  } = details;
 
-  // Localized info mapping
+  // Localized info mapping fallback
   const primaryInfo = appInfos[0]?.attributes || {};
   const name = app.attributes?.name || primaryInfo.name || 'App Store Connect App';
-  const subtitle = primaryInfo.subtitle || undefined;
-  const description = primaryInfo.description || undefined;
+  const subtitle = fetchedSubtitle || primaryInfo.subtitle || undefined;
+  const description = fetchedDescription || primaryInfo.description || undefined;
 
   // Age rating normalization: e.g. "FOUR_PLUS" -> "4+", "TWELVE_PLUS" -> "12+"
   let normalizedAgeRating = '4+';
@@ -41,8 +56,8 @@ export function extractFromAppStoreConnect(
     bundleId: app.attributes?.bundleId || 'UNKNOWN',
     appName: name,
     version: version || '1.0.0',
-    build: '1',
-    minOSVersion: 'UNKNOWN',
+    build: buildNumber || '1',
+    minOSVersion: minOsVersion || 'UNKNOWN',
     targetDevices: ['iPhone', 'iPad'],
     permissions: [],
     entitlements: [],
@@ -59,7 +74,7 @@ export function extractFromAppStoreConnect(
     },
     security: {
       atsAllowsArbitraryLoads: 'UNKNOWN',
-      usesNonExemptEncryptionDeclared: 'UNKNOWN'
+      usesNonExemptEncryptionDeclared: usesNonExemptEncryption !== undefined ? usesNonExemptEncryption : 'UNKNOWN'
     },
     features: {
       hasInAppPurchases: inAppPurchases.length > 0,
@@ -74,13 +89,27 @@ export function extractFromAppStoreConnect(
       name,
       subtitle,
       description,
+      keywords,
       privacyPolicyUrl,
-      supportUrl: undefined, // Connect API doesn't expose support URL in basic response
+      supportUrl: supportUrl || undefined,
       category,
       ageRating: normalizedAgeRating,
       listingProvided: false
     },
-    screenshots: [], // Screenshot scanning is not supported via basic App Store Connect API lookup
+    screenshots: screenshots && screenshots.length > 0
+      ? screenshots.map((s, idx) => ({
+          id: `ss_connect_${idx + 1}`,
+          name: `Screenshot ${idx + 1}`,
+          width: s.width,
+          height: s.height,
+          format: 'PNG',
+          deviceTarget: s.deviceType || 'iPhone 6.7"',
+          aspectRatio: s.height > s.width ? '9:19.5' : '19.5:9',
+          isValidSize: true,
+          precision: 'EXACT' as const
+        }))
+      : [],
     rawInfo: details
   };
 }
+

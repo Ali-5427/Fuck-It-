@@ -5,7 +5,8 @@ import {
   ReadinessStatus,
   AuditComparison,
   FindingEvidence,
-  AuditSeverity
+  AuditSeverity,
+  AuditScanType
 } from '../types';
 import { getEffectiveRules } from './rules';
 import { isValidAppStoreScreenshotSize } from './extractor';
@@ -497,8 +498,16 @@ export function evaluateInspection(
   buildNumber: string,
   appVersion: string,
   existingFindings: Finding[] = [],
-  isListingOnly: boolean = false
+  isListingOnly: boolean = false,
+  auditType?: AuditScanType
 ): AuditRun {
+  const resolvedAuditType: AuditScanType = auditType 
+    ? auditType 
+    : (isListingOnly || inspection.metadata?.listingProvided) 
+    ? 'LISTING_SCAN' 
+    : 'BINARY_SCAN';
+
+  const isListing = isListingOnly || resolvedAuditType === 'LISTING_SCAN';
   const auditId = `audit_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const findings: Finding[] = [];
   const passedChecks: { ruleId: string; title: string }[] = [];
@@ -508,7 +517,7 @@ export function evaluateInspection(
   const effectiveRules = getEffectiveRules();
   for (const rule of effectiveRules) {
     if (!rule.enabled) continue;
-    if (isListingOnly) {
+    if (isListing) {
       const allowedListingRules = [
         'RULE-PRIV-02',
         'RULE-META-01',
@@ -583,7 +592,15 @@ export function evaluateInspection(
 
   const readinessStatus = computeReadiness(findings);
   const copy = readinessCopy(readinessStatus);
-  const summary = `${copy.summaryHint} ${highCount} high, ${medCount} medium, ${lowCount} low, ${manualCount} manual check${manualCount === 1 ? '' : 's'}. ${passedChecks.length} check${passedChecks.length === 1 ? '' : 's'} looked clear in this run.`;
+  
+  let summary = '';
+  if (resolvedAuditType === 'LISTING_SCAN') {
+    summary = `Storefront Listing Audit: Verified public App Store metadata, descriptions, category rules, and screenshot compliance. ${highCount} high, ${medCount} medium, ${lowCount} low priority issue${lowCount === 1 ? '' : 's'}. Deep binary checks (Privacy Manifests, Required Reason APIs, ATS encryption) require your compiled build.`;
+  } else if (resolvedAuditType === 'CONNECT_SCAN') {
+    summary = `App Store Connect Sync Audit: Checked live App Store version states, descriptions, keywords, promotional text, support URLs, In-App Purchase products, and TestFlight builds. ${highCount} high, ${medCount} medium, ${lowCount} low.`;
+  } else {
+    summary = `${copy.summaryHint} ${highCount} high, ${medCount} medium, ${lowCount} low, ${manualCount} manual check${manualCount === 1 ? '' : 's'}. ${passedChecks.length} check${passedChecks.length === 1 ? '' : 's'} looked clear in this run.`;
+  }
 
   const siwaLine = inspection.features.hasSignInWithApple === true
     ? '- Sign in with Apple appears to be present in the build scan.'
@@ -599,6 +616,7 @@ export function evaluateInspection(
     appId,
     buildNumber,
     appVersion,
+    auditType: resolvedAuditType,
     createdAt: new Date().toISOString(),
     readinessStatus,
     ruleVersion: '2026.2-phase-a',

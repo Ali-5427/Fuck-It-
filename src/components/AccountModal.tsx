@@ -722,6 +722,11 @@ export const AccountModal: React.FC<AccountModalProps> = ({
                             const file = e.target.files?.[0];
                             if (file) {
                               setP8FileName(file.name);
+                              // Auto-extract Key ID from standard Apple AuthKey_XXXXXXXXXX.p8 filename
+                              const keyMatch = file.name.match(/AuthKey_([A-Z0-9]+)\.p8/i);
+                              if (keyMatch && keyMatch[1] && !keyId) {
+                                setKeyId(keyMatch[1].toUpperCase());
+                              }
                               const reader = new FileReader();
                               reader.onload = (evt) => {
                                 setPrivateKeyPem(evt.target?.result as string);

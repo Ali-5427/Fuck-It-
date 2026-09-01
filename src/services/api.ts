@@ -8,8 +8,10 @@ import {
   AdminStats 
 } from '../types';
 import { insforge } from './insforge';
+import { extractFromItunesLookup } from '../engine/itunesExtractor';
+import { evaluateInspection } from '../engine/evaluator';
 
-const DEFAULT_TIMEOUT_MS = 7000;
+const DEFAULT_TIMEOUT_MS = 15000;
 
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
@@ -23,7 +25,7 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
     return response;
   } catch (err: any) {
     if (err.name === 'AbortError') {
-      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s. Please try again.`);
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s. Please check your connection and try again.`);
     }
     throw new Error(err.message || 'Network request failed. Please check your connection.');
   } finally {
@@ -33,19 +35,24 @@ async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutM
 
 export const apiClient = {
   async healthCheck() {
-    const res = await fetchWithTimeout('/api/health');
+    const res = await fetchWithTimeout('/api/health', {}, 5000);
     if (!res.ok) throw new Error('Health check failed');
     return res.json();
   },
 
   async enhanceAuditWithAI(inspection: NormalizedAppInspection, findings: Finding[]) {
-    const res = await fetchWithTimeout('/api/ai/correlate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ inspection, findings })
-    }, 8000);
-    if (!res.ok) throw new Error('AI correlation failed');
-    return res.json();
+    try {
+      const res = await fetchWithTimeout('/api/ai/correlate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inspection, findings })
+      }, 15000);
+      if (!res.ok) throw new Error('AI correlation failed');
+      return await res.json();
+    } catch (err) {
+      console.warn('AI enhancement fallback to rule-based engine:', err);
+      return { success: false, findings };
+    }
   },
 
   async analyzeRejection(rejectionText: string): Promise<RejectionAnalysisResult> {
@@ -53,7 +60,7 @@ export const apiClient = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectionText })
-    }, 8000);
+    }, 15000);
     if (!res.ok) throw new Error('Failed to analyze rejection message');
     return res.json();
   },
@@ -63,7 +70,7 @@ export const apiClient = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ metadata })
-    });
+    }, 15000);
     if (!res.ok) throw new Error('Failed to validate metadata');
     return res.json();
   },
@@ -73,7 +80,7 @@ export const apiClient = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ width, height, fileName })
-    });
+    }, 10000);
     if (!res.ok) throw new Error('Failed to validate screenshot');
     return res.json();
   },
@@ -107,16 +114,36 @@ export const apiClient = {
   },
 
   async tryNow(query: string): Promise<{ inspection: NormalizedAppInspection; auditRun: any }> {
-    const res = await fetchWithTimeout('/api/try-now', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query })
-    }, 8000);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to check app via iTunes search');
+    try {
+      const res = await fetchWithTimeout('/api/try-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query })
+      }, 15000);
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('Server try-now fetch failed or timed out, executing direct client-side extraction:', err);
     }
-    return res.json();
+
+    // Direct client fallback to iTunes Search API if server is unavailable or slow
+    const inspection = await extractFromItunesLookup(query);
+    if (!inspection) {
+      throw new Error(`Could not find an active App Store listing matching "${query}". Please check the app name or URL.`);
+    }
+
+    const auditRun = evaluateInspection(
+      inspection,
+      `try_now_${inspection.bundleId}`,
+      inspection.build,
+      inspection.version,
+      [],
+      true,
+      'LISTING_SCAN'
+    );
+
+    return { inspection, auditRun };
   },
 
   async saveConnectKey(issuerId: string, keyId: string, privateKeyPem: string): Promise<{ success: boolean; maskedKey: string }> {

@@ -207,12 +207,14 @@ export interface NormalizedAppInspection {
   rawInfo?: Record<string, any>;
 }
 
+export type AuditScanType = 'BINARY_SCAN' | 'LISTING_SCAN' | 'CONNECT_SCAN';
+
 export interface ApplicationUpload {
   id: string;
   appId: string;
   fileName: string;
   fileSize: number;
-  fileType: 'ipa' | 'zip' | 'plist' | 'manual';
+  fileType: 'ipa' | 'zip' | 'plist' | 'manual' | 'itunes';
   uploadedAt: string;
   status: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
   progressStep?: string;
@@ -225,6 +227,7 @@ export interface AuditRun {
   id: string;
   appId: string;
   uploadId?: string;
+  auditType?: AuditScanType;
   buildNumber: string;
   appVersion: string;
   createdAt: string;

@@ -8,7 +8,8 @@ import {
   FixNote, 
   SubmissionReport,
   AuditComparison,
-  RuleCategory
+  RuleCategory,
+  AuditScanType
 } from '../types';
 import { evaluateInspection, compareAudits, computeReadiness } from '../engine/evaluator';
 import { apiClient } from './api';
@@ -351,6 +352,7 @@ class AppStore {
     currentVersion?: string;
     currentBuild?: string;
     inspection?: NormalizedAppInspection;
+    auditType?: AuditScanType;
   }): Application {
     if (!data.inspection) {
       throw new Error('An extracted inspection is required to create an app.');
@@ -381,8 +383,19 @@ class AppStore {
     const inspection = data.inspection;
     this.inspectionsMap[id] = inspection;
 
+    // Determine audit scan type
+    const resolvedAuditType = data.auditType || (inspection.metadata?.listingProvided && inspection.permissions.length === 0 ? 'LISTING_SCAN' : 'BINARY_SCAN');
+
     // Run initial deterministic audit
-    const initialAudit = evaluateInspection(inspection, id, newApp.currentBuild, newApp.currentVersion, [], !!inspection.metadata?.listingProvided);
+    const initialAudit = evaluateInspection(
+      inspection, 
+      id, 
+      newApp.currentBuild, 
+      newApp.currentVersion, 
+      [], 
+      resolvedAuditType === 'LISTING_SCAN',
+      resolvedAuditType
+    );
     this.auditsMap[id] = [initialAudit];
 
     newApp.lastAuditDate = initialAudit.createdAt;
@@ -619,8 +632,17 @@ class AppStore {
 
     // Carry forward findings states if unchanged
     const existingFindings = previousAudit ? previousAudit.findings : [];
+    const resolvedAuditType = previousAudit?.auditType || (inspection.metadata?.listingProvided && inspection.permissions.length === 0 ? 'LISTING_SCAN' : 'BINARY_SCAN');
 
-    const newAudit = evaluateInspection(inspection, appId, build, version, existingFindings, !!inspection.metadata?.listingProvided);
+    const newAudit = evaluateInspection(
+      inspection, 
+      appId, 
+      build, 
+      version, 
+      existingFindings, 
+      resolvedAuditType === 'LISTING_SCAN',
+      resolvedAuditType
+    );
 
     // AI enhancement layer (server-side Gemini)
     try {
