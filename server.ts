@@ -103,8 +103,8 @@ export function createServerApp() {
   // 5. Rejection Analyzer
   app.post('/api/rejection/analyze', async (req: Request, res: Response) => {
     const { rejectionText } = req.body;
-    if (!rejectionText || rejectionText.trim() === '') {
-      return res.status(400).json({ error: 'Rejection text is required' });
+    if (typeof rejectionText !== 'string' || rejectionText.trim() === '') {
+      return res.status(400).json({ error: 'Rejection text must be a non-empty string' });
     }
 
     try {
@@ -132,8 +132,8 @@ export function createServerApp() {
 
   app.post('/api/try-now', rateLimiter, async (req: Request, res: Response) => {
     const { query } = req.body;
-    if (!query || query.trim() === '') {
-      return res.status(400).json({ error: 'Please enter an app name or App Store link.' });
+    if (typeof query !== 'string' || query.trim() === '') {
+      return res.status(400).json({ error: 'Please enter a valid app name or App Store link.' });
     }
 
     try {
@@ -533,6 +533,11 @@ export function createServerApp() {
       rules: APP_STORE_RULES,
       sources: APPLE_GUIDELINE_SOURCES
     });
+  });
+
+  // Global error handler for unhandled sync errors and body parsing errors
+  app.use((err: any, req: Request, res: Response, next: any) => {
+    res.status(400).json({ error: 'Invalid request' });
   });
 
   return app;

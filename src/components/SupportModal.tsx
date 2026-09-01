@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Mail, 
   Send, 
@@ -26,6 +26,13 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
   const [copiedEmail, setCopiedEmail] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -41,7 +48,8 @@ export const SupportModal: React.FC<SupportModalProps> = ({ isOpen, onClose }) =
     if (!supportEmail) return;
     navigator.clipboard.writeText(supportEmail);
     setCopiedEmail(true);
-    setTimeout(() => setCopiedEmail(false), 2000);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopiedEmail(false), 2000);
   };
 
   return (

@@ -463,3 +463,37 @@ case .userCancelled, .pending:
     enabled: true
   }
 ];
+
+const RULES_OVERRIDE_KEY = 'fixit_rules_override';
+
+export function getStoredRuleOverrides(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(RULES_OVERRIDE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    console.warn('Error reading rule overrides from localStorage:', err);
+    return {};
+  }
+}
+
+export function saveStoredRuleOverride(ruleId: string, enabled: boolean): Record<string, boolean> {
+  try {
+    const overrides = getStoredRuleOverrides();
+    overrides[ruleId] = enabled;
+    localStorage.setItem(RULES_OVERRIDE_KEY, JSON.stringify(overrides));
+    return overrides;
+  } catch (err) {
+    console.warn('Error persisting rule override to localStorage:', err);
+    return {};
+  }
+}
+
+export function getEffectiveRules(): RuleDefinition[] {
+  const overrides = getStoredRuleOverrides();
+  return APP_STORE_RULES.map(rule => {
+    if (typeof overrides[rule.id] === 'boolean') {
+      return { ...rule, enabled: overrides[rule.id] };
+    }
+    return rule;
+  });
+}

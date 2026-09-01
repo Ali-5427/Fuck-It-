@@ -14,21 +14,44 @@ import {
 } from 'lucide-react';
 import { apiClient } from '../services/api';
 import { AdminStats, AuditRule } from '../types';
-import { APP_STORE_RULES } from '../engine/rules';
+import { APP_STORE_RULES, getEffectiveRules, saveStoredRuleOverride } from '../engine/rules';
 import { APPLE_GUIDELINE_SOURCES } from '../engine/appleSources';
 
 export const AdminPanel: React.FC = () => {
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [rules, setRules] = useState<AuditRule[]>(APP_STORE_RULES);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const [rules, setRules] = useState<AuditRule[]>(() => getEffectiveRules());
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
 
   useEffect(() => {
-    apiClient.getAdminStats().then(setStats).catch(console.error);
+    setStatsLoading(true);
+    setStatsError(null);
+    apiClient.getAdminStats()
+      .then(data => {
+        setStats(data);
+        setStatsLoading(false);
+      })
+      .catch(err => {
+        setStats(null);
+        setStatsError(err.message || 'System statistics are currently unavailable.');
+        setStatsLoading(false);
+      });
   }, []);
 
   const toggleRule = (ruleId: string) => {
-    setRules(prev => prev.map(r => r.id === ruleId ? { ...r, enabled: !r.enabled } : r));
+    setRules(prev => {
+      const updated = prev.map(r => {
+        if (r.id === ruleId) {
+          const nextEnabled = !r.enabled;
+          saveStoredRuleOverride(ruleId, nextEnabled);
+          return { ...r, enabled: nextEnabled };
+        }
+        return r;
+      });
+      return updated;
+    });
   };
 
   const filteredRules = rules.filter(r => {
@@ -59,45 +82,64 @@ export const AdminPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Stats Cards */}
-      {stats && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-            <div className="text-xs text-slate-500">Active Rule Definitions</div>
-            <div className="text-2xl font-extrabold text-blue-600 mt-1">{rules.filter(r => r.enabled).length} / {rules.length}</div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-            <div className="text-xs text-slate-500">Total Preflights Run</div>
-            <div className="text-2xl font-extrabold text-emerald-600 mt-1">{stats.totalAudits}</div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-            <div className="text-xs text-slate-500">Apps Tracked</div>
-            <div className="text-2xl font-extrabold text-slate-900 mt-1">{stats.totalApps}</div>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
-            <div className="text-xs text-slate-500">Guidelines Version</div>
-            <div className="text-2xl font-extrabold text-blue-600 mt-1">2026.2</div>
-          </div>
+      {/* Stats Section */}
+      {statsLoading ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex items-center justify-center gap-3 text-slate-500 text-xs">
+          <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+          <span>Loading system compliance telemetry...</span>
         </div>
-      )}
+      ) : stats ? (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 font-mono">
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="text-xs text-slate-500">Active Rule Definitions</div>
+              <div className="text-2xl font-extrabold text-blue-600 mt-1">{rules.filter(r => r.enabled).length} / {rules.length}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="text-xs text-slate-500">Total Preflights Run</div>
+              <div className="text-2xl font-extrabold text-emerald-600 mt-1">{stats.totalAudits}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="text-xs text-slate-500">Apps Tracked</div>
+              <div className="text-2xl font-extrabold text-slate-900 mt-1">{stats.totalApps}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs">
+              <div className="text-xs text-slate-500">Guidelines Version</div>
+              <div className="text-2xl font-extrabold text-blue-600 mt-1">2026.2</div>
+            </div>
+          </div>
 
-      {/* Most Common Findings */}
-      {stats && stats.mostCommonFindings && (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-          <h3 className="font-bold text-slate-900 text-sm font-display flex items-center gap-2">
-            <Activity className="h-4 w-4 text-blue-600" />
-            <span>Most Frequent Developer Compliance Rejections</span>
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {stats.mostCommonFindings.map((item, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs">
-                <div className="flex items-center gap-2 truncate">
-                  <span className="text-blue-600 font-bold font-mono shrink-0">{item.ruleId}</span>
-                  <span className="text-slate-800 truncate">{item.title}</span>
-                </div>
-                <span className="text-amber-700 font-bold font-mono shrink-0 ml-2 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{item.count} detections</span>
+          {/* Most Common Findings */}
+          {stats.mostCommonFindings && stats.mostCommonFindings.length > 0 && (
+            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+              <h3 className="font-bold text-slate-900 text-sm font-display flex items-center gap-2">
+                <Activity className="h-4 w-4 text-blue-600" />
+                <span>Most Frequent Developer Compliance Rejections</span>
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {stats.mostCommonFindings.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-slate-50 text-xs">
+                    <div className="flex items-center gap-2 truncate">
+                      <span className="text-blue-600 font-bold font-mono shrink-0">{item.ruleId}</span>
+                      <span className="text-slate-800 truncate">{item.title}</span>
+                    </div>
+                    <span className="text-amber-700 font-bold font-mono shrink-0 ml-2 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">{item.count} detections</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-xs flex items-start gap-3.5">
+          <div className="p-2 rounded-xl bg-slate-200/80 text-slate-600 shrink-0 mt-0.5">
+            <Activity className="h-4 w-4" />
+          </div>
+          <div>
+            <h3 className="text-xs font-bold text-slate-800 uppercase tracking-wider font-mono">Live Telemetry & Stats Unavailable</h3>
+            <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+              {statsError || 'Live server statistics require a configured production analytics data source. The rule registry and guideline references below remain active.'}
+            </p>
           </div>
         </div>
       )}

@@ -8,69 +8,113 @@ export type Unsubscribe = () => void;
 export class AuthService {
   private currentUser: User | null = null;
   private unsubscribeAuth: Unsubscribe | null = null;
+  private inFlightSyncPromise: Promise<User | null> | null = null;
 
   constructor() {
     this.initAuthListener();
+  }
+
+  private async fetchAndSyncUserProfile(insUser: any): Promise<User> {
+    const { data: rawProfileData } = await insforge.auth.getProfile(insUser.id);
+    const profileData: any = rawProfileData || {};
+
+    let userTier = (profileData?.tier as any) || 'pro';
+    const trialEndsAt = profileData?.trialEndsAt as string | undefined;
+
+    const profileUpdatesToPersist: Record<string, any> = {};
+
+    if (trialEndsAt && userTier === 'pro') {
+      if (Date.now() > new Date(trialEndsAt).getTime()) {
+        userTier = 'free';
+        profileUpdatesToPersist.tier = 'free';
+      }
+    }
+
+    const emailLower = (insUser.email || '').toLowerCase();
+    const isWhitelistedAdmin = ADMIN_EMAILS.includes(emailLower);
+    const userRole = isWhitelistedAdmin ? 'admin' : (profileData?.role || 'developer');
+
+    // Auto-promote role to admin in DB if user is whitelisted but not yet admin in DB
+    if (isWhitelistedAdmin && profileData?.role !== 'admin') {
+      profileUpdatesToPersist.role = 'admin';
+    }
+
+    // Ensure appleTeamId and apiKey are generated once and persisted if missing
+    let appleTeamId = (profileData?.appleTeamId as string | undefined)?.trim();
+    if (!appleTeamId) {
+      appleTeamId = 'APL' + Math.random().toString(36).substring(2, 8).toUpperCase();
+      profileUpdatesToPersist.appleTeamId = appleTeamId;
+    }
+
+    let apiKey = (profileData?.apiKey as string | undefined)?.trim();
+    if (!apiKey) {
+      apiKey = 'ar_pk_live_' + Math.random().toString(36).substring(2, 12);
+      profileUpdatesToPersist.apiKey = apiKey;
+    }
+
+    if (Object.keys(profileUpdatesToPersist).length > 0) {
+      await insforge.auth.setProfile(profileUpdatesToPersist).catch(err => {
+        console.warn('Could not persist profile updates during sync:', err);
+      });
+    }
+
+    const appUser: User = {
+      id: insUser.id,
+      email: insUser.email || emailLower || 'developer@apple.dev',
+      name: profileData?.name || insUser.profile?.name || (insUser.email ? insUser.email.split('@')[0] : 'iOS Developer'),
+      role: userRole,
+      tier: userTier,
+      trialEndsAt,
+      teamName: (profileData?.teamName as string) || 'Apple Developer Team',
+      appleTeamId,
+      avatarUrl: profileData?.avatar_url || insUser.profile?.avatar_url || undefined,
+      createdAt: insUser.createdAt || new Date().toISOString(),
+      settings: {
+        notificationsEnabled: profileData?.notificationsEnabled ?? true,
+        autoRecheckOnUpload: profileData?.autoRecheckOnUpload ?? true,
+        defaultExportFormat: profileData?.defaultExportFormat ?? 'markdown',
+        apiKey
+      }
+    };
+
+    return appUser;
+  }
+
+  private async syncCurrentUser(knownUser?: any): Promise<User | null> {
+    if (this.inFlightSyncPromise) {
+      return this.inFlightSyncPromise;
+    }
+
+    this.inFlightSyncPromise = (async () => {
+      try {
+        let insUser = knownUser;
+        if (!insUser) {
+          const { data: userData } = await insforge.auth.getCurrentUser();
+          insUser = userData?.user;
+        }
+        if (insUser) {
+          const appUser = await this.fetchAndSyncUserProfile(insUser);
+          this.currentUser = appUser;
+          store.setUser(appUser);
+          return appUser;
+        }
+        return null;
+      } catch (err) {
+        console.warn('Error syncing user profile and auth state:', err);
+        return null;
+      } finally {
+        this.inFlightSyncPromise = null;
+      }
+    })();
+
+    return this.inFlightSyncPromise;
   }
 
   private initAuthListener() {
     // Subscribe to InsForge auth changes
     const unsubscribe = insforge.auth.onAuthStateChange(async (event) => {
       if (event === 'signedIn' || event === 'tokenRefreshed') {
-        try {
-          const { data: userData } = await insforge.auth.getCurrentUser();
-          const insUser = userData?.user;
-          if (insUser) {
-            const { data: rawProfileData } = await insforge.auth.getProfile(insUser.id);
-            const profileData: any = rawProfileData;
-
-            let userTier = (profileData?.tier as any) || 'pro';
-            const trialEndsAt = profileData?.trialEndsAt as string | undefined;
-
-            if (trialEndsAt && userTier === 'pro') {
-              if (Date.now() > new Date(trialEndsAt).getTime()) {
-                userTier = 'free';
-                await insforge.auth.setProfile({ tier: 'free' }).catch(err => {
-                  console.warn('Could not persist auto-downgrade on trial expiration:', err);
-                });
-              }
-            }
-
-            const emailLower = (insUser.email || '').toLowerCase();
-            const isWhitelistedAdmin = ADMIN_EMAILS.includes(emailLower);
-            const userRole = isWhitelistedAdmin ? 'admin' : 'developer';
-
-            // Auto-promote role to admin in DB if user is whitelisted but not yet admin in DB
-            if (isWhitelistedAdmin && profileData?.role !== 'admin') {
-              await insforge.auth.setProfile({ role: 'admin' }).catch(err => {
-                console.warn('Could not persist auto-promotion to admin role:', err);
-              });
-            }
-
-            const appUser: User = {
-              id: insUser.id,
-              email: insUser.email || 'developer@apple.dev',
-              name: profileData?.name || insUser.profile?.name || (insUser.email ? insUser.email.split('@')[0] : 'iOS Developer'),
-              role: userRole,
-              tier: userTier,
-              trialEndsAt,
-              teamName: (profileData?.teamName as string) || 'Apple Developer Team',
-              appleTeamId: (profileData?.appleTeamId as string) || 'APL' + Math.random().toString(36).substring(2, 8).toUpperCase(),
-              avatarUrl: profileData?.avatar_url || insUser.profile?.avatar_url || undefined,
-              createdAt: insUser.createdAt || new Date().toISOString(),
-              settings: {
-                notificationsEnabled: profileData?.notificationsEnabled ?? true,
-                autoRecheckOnUpload: profileData?.autoRecheckOnUpload ?? true,
-                defaultExportFormat: profileData?.defaultExportFormat ?? 'markdown',
-                apiKey: profileData?.apiKey || 'ar_pk_live_' + Math.random().toString(36).substring(2, 12)
-              }
-            };
-            this.currentUser = appUser;
-            store.setUser(appUser);
-          }
-        } catch (err) {
-          console.warn('Error fetching current user state:', err);
-        }
+        await this.syncCurrentUser();
       } else if (event === 'signedOut') {
         this.currentUser = null;
         store.setUser(null);
@@ -80,61 +124,7 @@ export class AuthService {
     this.unsubscribeAuth = () => unsubscribe();
 
     // Initial check on load
-    insforge.auth.getCurrentUser().then(async ({ data: userData }) => {
-      const insUser = userData?.user;
-      if (insUser) {
-        try {
-          const { data: rawProfileData } = await insforge.auth.getProfile(insUser.id);
-          const profileData: any = rawProfileData;
-
-          let userTier = (profileData?.tier as any) || 'pro';
-          const trialEndsAt = profileData?.trialEndsAt as string | undefined;
-
-          if (trialEndsAt && userTier === 'pro') {
-            if (Date.now() > new Date(trialEndsAt).getTime()) {
-              userTier = 'free';
-              await insforge.auth.setProfile({ tier: 'free' }).catch(err => {
-                console.warn('Could not persist auto-downgrade on trial expiration:', err);
-              });
-            }
-          }
-
-          const emailLower = (insUser.email || '').toLowerCase();
-          const isWhitelistedAdmin = ADMIN_EMAILS.includes(emailLower);
-          const userRole = isWhitelistedAdmin ? 'admin' : 'developer';
-
-          // Auto-promote role to admin in DB if user is whitelisted but not yet admin in DB
-          if (isWhitelistedAdmin && profileData?.role !== 'admin') {
-            await insforge.auth.setProfile({ role: 'admin' }).catch(err => {
-              console.warn('Could not persist auto-promotion to admin role:', err);
-            });
-          }
-
-          const appUser: User = {
-            id: insUser.id,
-            email: insUser.email || 'developer@apple.dev',
-            name: profileData?.name || insUser.profile?.name || (insUser.email ? insUser.email.split('@')[0] : 'iOS Developer'),
-            role: userRole,
-            tier: userTier,
-            trialEndsAt,
-            teamName: (profileData?.teamName as string) || 'Apple Developer Team',
-            appleTeamId: (profileData?.appleTeamId as string) || 'APL' + Math.random().toString(36).substring(2, 8).toUpperCase(),
-            avatarUrl: profileData?.avatar_url || insUser.profile?.avatar_url || undefined,
-            createdAt: insUser.createdAt || new Date().toISOString(),
-            settings: {
-              notificationsEnabled: profileData?.notificationsEnabled ?? true,
-              autoRecheckOnUpload: profileData?.autoRecheckOnUpload ?? true,
-              defaultExportFormat: profileData?.defaultExportFormat ?? 'markdown',
-              apiKey: profileData?.apiKey || 'ar_pk_live_' + Math.random().toString(36).substring(2, 12)
-            }
-          };
-          this.currentUser = appUser;
-          store.setUser(appUser);
-        } catch (err) {
-          console.warn('Error fetching initial user profile:', err);
-        }
-      }
-    }).catch(err => {
+    this.syncCurrentUser().catch(err => {
       console.warn('Error checking initial auth state:', err);
     });
   }
@@ -171,6 +161,9 @@ export class AuthService {
     const isWhitelistedAdmin = ADMIN_EMAILS.includes(email.toLowerCase());
     const userRole = isWhitelistedAdmin ? 'admin' : 'developer';
 
+    const finalAppleTeamId = appleTeamId?.trim() || 'DEV' + Math.random().toString(36).substring(2, 8).toUpperCase();
+    const finalApiKey = 'ar_pk_live_' + Math.random().toString(36).substring(2, 12);
+
     const appUser: User = {
       id: insUser.id,
       email: insUser.email || email,
@@ -179,13 +172,13 @@ export class AuthService {
       tier: 'pro',
       trialEndsAt,
       teamName: teamName || 'Indie Studio',
-      appleTeamId: appleTeamId || 'DEV' + Math.random().toString(36).substring(2, 8).toUpperCase(),
+      appleTeamId: finalAppleTeamId,
       createdAt: new Date().toISOString(),
       settings: {
         notificationsEnabled: true,
         autoRecheckOnUpload: true,
         defaultExportFormat: 'markdown',
-        apiKey: 'ar_pk_live_' + Math.random().toString(36).substring(2, 12)
+        apiKey: finalApiKey
       }
     };
 
@@ -218,50 +211,7 @@ export class AuthService {
     const insUser = logData?.user;
     if (!insUser) throw new Error('User not found.');
 
-    const { data: rawProfileData } = await insforge.auth.getProfile(insUser.id);
-    const profileData: any = rawProfileData;
-
-    let userTier = (profileData?.tier as any) || 'pro';
-    const trialEndsAt = profileData?.trialEndsAt as string | undefined;
-
-    if (trialEndsAt && userTier === 'pro') {
-      if (Date.now() > new Date(trialEndsAt).getTime()) {
-        userTier = 'free';
-        await insforge.auth.setProfile({ tier: 'free' }).catch(err => {
-          console.warn('Could not persist auto-downgrade on trial expiration:', err);
-        });
-      }
-    }
-
-    const emailLower = email.toLowerCase();
-    const isWhitelistedAdmin = ADMIN_EMAILS.includes(emailLower);
-    const userRole = isWhitelistedAdmin ? 'admin' : 'developer';
-
-    // Auto-promote role to admin in DB if user is whitelisted but not yet admin in DB
-    if (isWhitelistedAdmin && profileData?.role !== 'admin') {
-      await insforge.auth.setProfile({ role: 'admin' }).catch(err => {
-        console.warn('Could not persist auto-promotion to admin role:', err);
-      });
-    }
-
-    const appUser: User = {
-      id: insUser.id,
-      email,
-      name: profileData?.name || insUser.profile?.name || email.split('@')[0],
-      role: userRole,
-      tier: userTier,
-      trialEndsAt,
-      teamName: (profileData?.teamName as string) || 'Apple Developer Team',
-      appleTeamId: (profileData?.appleTeamId as string) || 'APL982019',
-      createdAt: insUser.createdAt || new Date().toISOString(),
-      settings: {
-        notificationsEnabled: profileData?.notificationsEnabled ?? true,
-        autoRecheckOnUpload: profileData?.autoRecheckOnUpload ?? true,
-        defaultExportFormat: profileData?.defaultExportFormat ?? 'markdown',
-        apiKey: profileData?.apiKey || 'ar_pk_live_' + Math.random().toString(36).substring(2, 12)
-      }
-    };
-
+    const appUser = await this.fetchAndSyncUserProfile(insUser);
     this.currentUser = appUser;
     store.setUser(appUser);
     return appUser;

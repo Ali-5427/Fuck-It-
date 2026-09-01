@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   ShieldAlert, 
@@ -37,6 +37,13 @@ export const FindingDetailModal: React.FC<FindingDetailModalProps> = ({
   const [copiedSnippet, setCopiedSnippet] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
   const [targetBuild, setTargetBuild] = useState(currentBuild);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     setTargetBuild(currentBuild);
@@ -48,7 +55,8 @@ export const FindingDetailModal: React.FC<FindingDetailModalProps> = ({
     if (finding.codeSnippet) {
       navigator.clipboard.writeText(finding.codeSnippet);
       setCopiedSnippet(true);
-      setTimeout(() => setCopiedSnippet(false), 2000);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopiedSnippet(false), 2000);
     }
   };
 
@@ -202,7 +210,7 @@ export const FindingDetailModal: React.FC<FindingDetailModalProps> = ({
               </h4>
               <div className="space-y-2">
                 {finding.evidence.map((ev, idx) => (
-                  <div key={idx} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
+                  <div key={`${ev.key}-${ev.location || 'info'}-${ev.detectionStatus || idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
                     <div className="flex items-center justify-between">
                       <span className="font-mono font-bold text-blue-600">{ev.key}</span>
                       <span className="text-slate-500 font-mono text-[10px]">{ev.location}</span>

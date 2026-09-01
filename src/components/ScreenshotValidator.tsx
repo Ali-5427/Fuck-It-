@@ -14,20 +14,46 @@ import {
 import { apiClient } from '../services/api';
 import { ScreenshotValidationResult } from '../types';
 
+interface ValidatedScreenshotItem extends ScreenshotValidationResult {
+  id: string;
+}
+
 export const ScreenshotValidator: React.FC = () => {
-  const [results, setResults] = useState<ScreenshotValidationResult[]>([]);
+  const [results, setResults] = useState<ValidatedScreenshotItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files) return;
+    setError(null);
 
     Array.from(e.target.files).forEach((file: File) => {
+      const url = URL.createObjectURL(file);
       const img = new Image();
+
       img.onload = async () => {
-        const val = await apiClient.validateScreenshot(img.width, img.height, file.name);
-        setResults(prev => [val, ...prev]);
+        URL.revokeObjectURL(url);
+        try {
+          const val = await apiClient.validateScreenshot(img.width, img.height, file.name);
+          const itemWithId: ValidatedScreenshotItem = {
+            ...val,
+            id: `screenshot_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${file.name}`
+          };
+          setResults(prev => [itemWithId, ...prev]);
+        } catch (err: any) {
+          setError(err.message || 'Failed to validate screenshot dimensions.');
+        }
       };
-      img.src = URL.createObjectURL(file);
+
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        setError(`Failed to load "${file.name}". Please provide a valid PNG or JPEG image file.`);
+      };
+
+      img.src = url;
     });
+
+    // Reset input value so the same file can be re-selected if needed
+    e.target.value = '';
   };
 
   return (
@@ -70,6 +96,22 @@ export const ScreenshotValidator: React.FC = () => {
           </p>
         </label>
       </div>
+
+      {/* Error Alert */}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-xs text-red-700 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" />
+            <span>{error}</span>
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="text-red-500 hover:text-red-700"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       {/* Required Sizes Reference Grid */}
       <div>
@@ -114,9 +156,9 @@ export const ScreenshotValidator: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-2.5">
-            {results.map((res, idx) => (
+            {results.map((res) => (
               <div
-                key={idx}
+                key={res.id}
                 className={`flex items-start justify-between rounded-xl border p-4 text-xs transition-colors bg-white shadow-xs ${
                   res.isValidDimension
                     ? 'border-emerald-200'

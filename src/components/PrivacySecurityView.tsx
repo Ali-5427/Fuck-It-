@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Lock, 
   ShieldCheck, 
@@ -15,12 +15,20 @@ import { store } from '../services/store';
 export const PrivacySecurityView: React.FC = () => {
   const [retentionDays, setRetentionDays] = useState('7');
   const [purgedMsg, setPurgedMsg] = useState(false);
+  const purgeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (purgeTimeoutRef.current) clearTimeout(purgeTimeoutRef.current);
+    };
+  }, []);
 
   const handlePurgeAllData = () => {
     if (confirm('This will wipe all locally stored applications, audit history, and cached metadata. Proceed?')) {
       store.clearData();
       setPurgedMsg(true);
-      setTimeout(() => setPurgedMsg(false), 3000);
+      if (purgeTimeoutRef.current) clearTimeout(purgeTimeoutRef.current);
+      purgeTimeoutRef.current = setTimeout(() => setPurgedMsg(false), 3000);
     }
   };
 

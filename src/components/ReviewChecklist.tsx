@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { 
   CheckSquare, 
@@ -141,6 +141,13 @@ export const ReviewChecklist: React.FC<ReviewChecklistProps> = ({ isOpen, onClos
   const [checkedIds, setCheckedIds] = useState<Record<string, boolean>>({});
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [copied, setCopied] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   // If this is a modal and it is not open, do not render
   if (isOpen !== undefined && !isOpen) return null;
@@ -174,7 +181,8 @@ export const ReviewChecklist: React.FC<ReviewChecklistProps> = ({ isOpen, onClos
 
     navigator.clipboard.writeText(lines.join('\n'));
     setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopied(false), 2000);
   };
 
   const content = (

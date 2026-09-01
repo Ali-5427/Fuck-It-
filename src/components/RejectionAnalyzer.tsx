@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   AlertTriangle, 
   Sparkles, 
@@ -21,6 +21,13 @@ export const RejectionAnalyzer: React.FC = () => {
   const [result, setResult] = useState<RejectionAnalysisResult | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [copiedDraft, setCopiedDraft] = useState(false);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   const handleAnalyze = async (textToAnalyze?: string) => {
     const text = textToAnalyze || rejectionText;
@@ -47,7 +54,8 @@ export const RejectionAnalyzer: React.FC = () => {
     if (result?.developerResponseDraft) {
       navigator.clipboard.writeText(result.developerResponseDraft);
       setCopiedDraft(true);
-      setTimeout(() => setCopiedDraft(false), 2000);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setCopiedDraft(false), 2000);
     }
   };
 

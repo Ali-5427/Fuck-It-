@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   FileCheck, 
@@ -28,6 +28,13 @@ export const SubmissionReportModal: React.FC<SubmissionReportModalProps> = ({
   useScrollLock(!!report);
   const [copiedMd, setCopiedMd] = useState(false);
   const [checklist, setChecklist] = useState(report?.manualChecklist || []);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (report?.manualChecklist) {
@@ -89,7 +96,8 @@ ${report.reviewerNotesDraft}
   const handleCopyMarkdown = () => {
     navigator.clipboard.writeText(generateMarkdown());
     setCopiedMd(true);
-    setTimeout(() => setCopiedMd(false), 2000);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopiedMd(false), 2000);
   };
 
   const handleDownloadMarkdown = () => {

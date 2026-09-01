@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useScrollLock } from '../hooks/useScrollLock';
 import { 
   KeyRound, 
@@ -157,6 +157,13 @@ export const PrivacyStringsModal: React.FC<PrivacyStringsModalProps> = ({ isOpen
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('ALL');
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
 
   if (!isOpen) return null;
 
@@ -173,7 +180,8 @@ export const PrivacyStringsModal: React.FC<PrivacyStringsModalProps> = ({ isOpen
   const handleCopy = (key: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedKey(key);
-    setTimeout(() => setCopiedKey(null), 2000);
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    copyTimeoutRef.current = setTimeout(() => setCopiedKey(null), 2000);
   };
 
   return (

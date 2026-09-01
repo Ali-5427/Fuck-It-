@@ -138,20 +138,30 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   };
 
   const handleStartAnalysis = async () => {
+    if (isProcessing) return;
     setErrorMsg(null);
+
+    if (activeTab === 'file') {
+      if (!file) {
+        setErrorMsg('Please select an iOS IPA, ZIP archive, or Info.plist file.');
+        return;
+      }
+    } else if (activeTab === 'plist') {
+      if (!rawPlistText.trim()) {
+        setErrorMsg('Please paste Info.plist XML or JSON content.');
+        return;
+      }
+    }
+
+    setIsProcessing(true);
+    setProgressStep(0);
+    setProcessingStatusText('Reading and extracting package contents...');
+
     try {
       if (activeTab === 'file') {
-        if (!file) {
-          setErrorMsg('Please select an iOS IPA, ZIP archive, or Info.plist file.');
-          return;
-        }
-        const inspection = await extractAppArtifact(file, file.name);
-        await processPipeline(inspection, customAppName || file.name, customBundleId || inspection.bundleId);
+        const inspection = await extractAppArtifact(file!, file!.name);
+        await processPipeline(inspection, customAppName || file!.name, customBundleId || inspection.bundleId);
       } else if (activeTab === 'plist') {
-        if (!rawPlistText.trim()) {
-          setErrorMsg('Please paste Info.plist XML or JSON content.');
-          return;
-        }
         const inspection = parseInspectionData(rawPlistText, '', []);
         await processPipeline(inspection, customAppName || inspection.appName, customBundleId || inspection.bundleId);
       }
@@ -415,7 +425,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
           <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4 bg-slate-50">
             <button
               onClick={onClose}
-              className="rounded-lg px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+              disabled={isProcessing}
+              className="rounded-lg px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer disabled:opacity-50"
             >
               Cancel
             </button>
@@ -423,7 +434,8 @@ export const UploadModal: React.FC<UploadModalProps> = ({
             <button
               id="btn_run_preflight_audit"
               onClick={handleStartAnalysis}
-              className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              disabled={isProcessing}
+              className="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-blue-500/20 hover:bg-blue-700 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               <span>Run Preflight Audit</span>
               <ArrowRight className="h-4 w-4" />

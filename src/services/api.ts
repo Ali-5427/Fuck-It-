@@ -9,34 +9,57 @@ import {
 } from '../types';
 import { insforge } from './insforge';
 
+const DEFAULT_TIMEOUT_MS = 7000;
+
+async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = DEFAULT_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal
+    });
+    return response;
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s. Please try again.`);
+    }
+    throw new Error(err.message || 'Network request failed. Please check your connection.');
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export const apiClient = {
   async healthCheck() {
-    const res = await fetch('/api/health');
+    const res = await fetchWithTimeout('/api/health');
+    if (!res.ok) throw new Error('Health check failed');
     return res.json();
   },
 
   async enhanceAuditWithAI(inspection: NormalizedAppInspection, findings: Finding[]) {
-    const res = await fetch('/api/ai/correlate', {
+    const res = await fetchWithTimeout('/api/ai/correlate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ inspection, findings })
-    });
+    }, 8000);
     if (!res.ok) throw new Error('AI correlation failed');
     return res.json();
   },
 
   async analyzeRejection(rejectionText: string): Promise<RejectionAnalysisResult> {
-    const res = await fetch('/api/rejection/analyze', {
+    const res = await fetchWithTimeout('/api/rejection/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ rejectionText })
-    });
+    }, 8000);
     if (!res.ok) throw new Error('Failed to analyze rejection message');
     return res.json();
   },
 
   async validateMetadata(metadata: AppMetadataDraft): Promise<{ issues: MetadataIssue[]; suggestions: string[] }> {
-    const res = await fetch('/api/metadata/validate', {
+    const res = await fetchWithTimeout('/api/metadata/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ metadata })
@@ -46,11 +69,12 @@ export const apiClient = {
   },
 
   async validateScreenshot(width: number, height: number, fileName: string): Promise<ScreenshotValidationResult> {
-    const res = await fetch('/api/screenshots/validate', {
+    const res = await fetchWithTimeout('/api/screenshots/validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ width, height, fileName })
     });
+    if (!res.ok) throw new Error('Failed to validate screenshot');
     return res.json();
   },
 
@@ -60,7 +84,11 @@ export const apiClient = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const res = await fetch('/api/admin/stats', { headers });
+    const res = await fetchWithTimeout('/api/admin/stats', { headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Failed to fetch admin stats (status ${res.status})`);
+    }
     return res.json();
   },
 
@@ -70,16 +98,20 @@ export const apiClient = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const res = await fetch('/api/admin/rules', { headers });
+    const res = await fetchWithTimeout('/api/admin/rules', { headers });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `Failed to fetch admin rules (status ${res.status})`);
+    }
     return res.json();
   },
 
   async tryNow(query: string): Promise<{ inspection: NormalizedAppInspection; auditRun: any }> {
-    const res = await fetch('/api/try-now', {
+    const res = await fetchWithTimeout('/api/try-now', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query })
-    });
+    }, 8000);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to check app via iTunes search');
@@ -93,7 +125,7 @@ export const apiClient = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const res = await fetch('/api/connect/save-key', {
+    const res = await fetchWithTimeout('/api/connect/save-key', {
       method: 'POST',
       headers,
       body: JSON.stringify({ issuerId, keyId, privateKeyPem })
@@ -111,10 +143,10 @@ export const apiClient = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const res = await fetch('/api/connect/list-apps', {
+    const res = await fetchWithTimeout('/api/connect/list-apps', {
       method: 'POST',
       headers
-    });
+    }, 8000);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to list apps from App Store Connect.');
@@ -128,11 +160,11 @@ export const apiClient = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const res = await fetch('/api/connect/check-app', {
+    const res = await fetchWithTimeout('/api/connect/check-app', {
       method: 'POST',
       headers,
       body: JSON.stringify({ appId })
-    });
+    }, 8000);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error || 'Failed to run audit check.');
@@ -146,7 +178,7 @@ export const apiClient = {
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     }
-    const res = await fetch('/api/connect/remove-key', {
+    const res = await fetchWithTimeout('/api/connect/remove-key', {
       method: 'DELETE',
       headers
     });

@@ -9,6 +9,32 @@ import {
 } from '../types';
 
 let genAIClient: GoogleGenAI | null = null;
+const GEMINI_TIMEOUT_MS = 18000;
+
+async function callWithTimeout<T>(
+  promiseFactory: (signal: AbortSignal) => Promise<T>,
+  timeoutMs: number = GEMINI_TIMEOUT_MS,
+  operationName: string = 'Gemini API call'
+): Promise<T> {
+  const controller = new AbortController();
+  let timeoutId: NodeJS.Timeout | null = null;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`${operationName} timed out after ${Math.round(timeoutMs / 1000)}s`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([
+      promiseFactory(controller.signal),
+      timeoutPromise
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
 
 function getGenAI(): GoogleGenAI | null {
   if (!genAIClient && process.env.GEMINI_API_KEY) {
@@ -73,13 +99,17 @@ Return JSON in this format:
   ]
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
-      }
-    });
+    const response = await callWithTimeout(
+      () => ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json'
+        }
+      }),
+      18000,
+      'Audit AI enhancement'
+    );
 
     const parsed = JSON.parse(response.text || '{}');
 
@@ -160,13 +190,17 @@ Return JSON in this format:
   "confidenceScore": 0.95
 }`;
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
-      }
-    });
+    const response = await callWithTimeout(
+      () => ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt,
+        config: {
+          responseMimeType: 'application/json'
+        }
+      }),
+      18000,
+      'Rejection analysis'
+    );
 
     const parsed = JSON.parse(response.text || '{}');
 
@@ -264,9 +298,10 @@ export async function analyzeMetadataWithAI(
   const ai = getGenAI();
   if (ai) {
     try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Review this App Store Connect metadata for subtle Apple Guideline 2.3 risks (keyword stuffing, misleading claims, trademark infringement, unclear descriptions):
+      const response = await callWithTimeout(
+        () => ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: `Review this App Store Connect metadata for subtle Apple Guideline 2.3 risks (keyword stuffing, misleading claims, trademark infringement, unclear descriptions):
 Name: ${metadata.name}
 Subtitle: ${metadata.subtitle}
 Description: ${metadata.description}
@@ -285,8 +320,11 @@ Return JSON:
   ],
   "suggestions": ["tip 1", "tip 2"]
 }`,
-        config: { responseMimeType: 'application/json' }
-      });
+          config: { responseMimeType: 'application/json' }
+        }),
+        18000,
+        'Metadata analysis'
+      );
 
       const parsed = JSON.parse(response.text || '{}');
       if (Array.isArray(parsed.additionalIssues)) {

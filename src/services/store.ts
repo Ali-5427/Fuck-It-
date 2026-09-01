@@ -30,6 +30,7 @@ class AppStore {
   private selectedAppId: string | null = null;
   private activeAuditId: string | null = null;
   private listeners: Set<() => void> = new Set();
+  private isSyncing = false;
 
   constructor() {
     this.init();
@@ -80,7 +81,8 @@ class AppStore {
   }
 
   public async syncFromDatabase() {
-    if (!this.user) return;
+    if (!this.user || this.isSyncing) return;
+    this.isSyncing = true;
 
     try {
       // 1. Fetch apps from InsForge
@@ -167,6 +169,8 @@ class AppStore {
       this.persist();
     } catch (err) {
       console.warn('InsForge DB sync warning:', err);
+    } finally {
+      this.isSyncing = false;
     }
   }
 

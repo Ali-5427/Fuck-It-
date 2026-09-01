@@ -7,7 +7,7 @@ import {
   FindingEvidence,
   AuditSeverity
 } from '../types';
-import { APP_STORE_RULES } from './rules';
+import { getEffectiveRules } from './rules';
 import { isValidAppStoreScreenshotSize } from './extractor';
 
 export function computeReadiness(findings: Finding[]): ReadinessStatus {
@@ -412,7 +412,8 @@ export function evaluateInspection(
   const existingStatusMap = new Map<string, Finding>();
   existingFindings.forEach(f => existingStatusMap.set(f.ruleId, f));
 
-  for (const rule of APP_STORE_RULES) {
+  const effectiveRules = getEffectiveRules();
+  for (const rule of effectiveRules) {
     if (!rule.enabled) continue;
     if (isListingOnly) {
       const allowedListingRules = [

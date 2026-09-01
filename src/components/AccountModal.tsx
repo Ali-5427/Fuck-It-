@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   User as UserIcon, 
@@ -62,6 +62,26 @@ export const AccountModal: React.FC<AccountModalProps> = ({
   const [copiedToken, setCopiedToken] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
+  const savedTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const copyKeyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const copyTokenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const regenTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
+      if (copyKeyTimeoutRef.current) clearTimeout(copyKeyTimeoutRef.current);
+      if (copyTokenTimeoutRef.current) clearTimeout(copyTokenTimeoutRef.current);
+      if (regenTimeoutRef.current) clearTimeout(regenTimeoutRef.current);
+    };
+  }, []);
+
+  const triggerSavedSuccess = (duration: number = 2000) => {
+    setSavedSuccess(true);
+    if (savedTimeoutRef.current) clearTimeout(savedTimeoutRef.current);
+    savedTimeoutRef.current = setTimeout(() => setSavedSuccess(false), duration);
+  };
+
   // Connections Tab State
   const [issuerId, setIssuerId] = useState('');
   const [keyId, setKeyId] = useState('');
@@ -102,8 +122,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     setConnectError(null);
     try {
       await apiClient.saveConnectKey(issuerId, keyId, privateKeyPem);
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2000);
+      triggerSavedSuccess(2000);
       await fetchConnection();
       setIssuerId('');
       setKeyId('');
@@ -123,8 +142,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     try {
       await apiClient.removeConnectKey();
       setConnectionStatus({ connected: false, apps: [] });
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 2000);
+      triggerSavedSuccess(2000);
     } catch (err: any) {
       setConnectError(err.message || 'Failed to disconnect key.');
     }
@@ -167,19 +185,18 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     } catch (err) {
       console.warn('Could not sync user profile update to Firestore:', err);
     }
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
+    triggerSavedSuccess(2500);
   };
 
   const handleSwitchTier = (newTier: 'free' | 'pro' | 'studio') => {
     store.updateUserTier(newTier);
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2500);
+    triggerSavedSuccess(2500);
   };
 
   const handleRegenerateKey = () => {
     setIsRegenerating(true);
-    setTimeout(() => {
+    if (regenTimeoutRef.current) clearTimeout(regenTimeoutRef.current);
+    regenTimeoutRef.current = setTimeout(() => {
       const newApiKey = 'ar_pk_live_' + Math.random().toString(36).substr(2, 12);
       store.updateUserSettings({ apiKey: newApiKey });
       setIsRegenerating(false);
@@ -190,10 +207,12 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     navigator.clipboard.writeText(text);
     if (type === 'key') {
       setCopiedKey(true);
-      setTimeout(() => setCopiedKey(false), 2000);
+      if (copyKeyTimeoutRef.current) clearTimeout(copyKeyTimeoutRef.current);
+      copyKeyTimeoutRef.current = setTimeout(() => setCopiedKey(false), 2000);
     } else {
       setCopiedToken(true);
-      setTimeout(() => setCopiedToken(false), 2000);
+      if (copyTokenTimeoutRef.current) clearTimeout(copyTokenTimeoutRef.current);
+      copyTokenTimeoutRef.current = setTimeout(() => setCopiedToken(false), 2000);
     }
   };
 
@@ -846,8 +865,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
                     type="button"
                     onClick={() => {
                       store.clearData();
-                      setSavedSuccess(true);
-                      setTimeout(() => setSavedSuccess(false), 2000);
+                      triggerSavedSuccess(2000);
                     }}
                     className="px-3 py-1.5 rounded-lg border border-red-300 bg-white hover:bg-red-50 text-red-700 font-bold text-xs transition-colors cursor-pointer"
                   >
