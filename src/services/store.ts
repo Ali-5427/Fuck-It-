@@ -739,7 +739,7 @@ class AppStore {
     const manualChecklist = [
       { id: 'chk_demo_creds', item: 'Active demo account login & password entered into App Store Connect Review Notes', category: 'Review Access', checked: false },
       { id: 'chk_privacy_url', item: 'Privacy Policy URL in App Store Connect points to live HTTPS page matching in-app link', category: 'Privacy', checked: !!inspection?.metadata.privacyPolicyUrl },
-      { id: 'chk_iap_configured', item: 'All In-App Purchase products submitted for review in App Store Connect with screenshots', category: 'In-App Purchase', checked: inspection?.features.hasInAppPurchases || false },
+      { id: 'chk_iap_configured', item: 'All In-App Purchase products submitted for review in App Store Connect with screenshots', category: 'In-App Purchase', checked: inspection?.features.hasInAppPurchases === true },
       { id: 'chk_restore_btn', item: 'Tested "Restore Purchases" button in TestFlight sandbox environment', category: 'In-App Purchase', checked: false },
       { id: 'chk_screenshots_69', item: 'Uploaded required 6.9" and 6.5" iPhone screenshots showing actual app in use', category: 'Screenshots', checked: (inspection?.screenshots.length || 0) > 0 },
       { id: 'chk_privacy_nutrition', item: 'Completed App Privacy Nutrition Label questions in App Store Connect matching Privacy Manifest', category: 'Privacy', checked: false },

@@ -52,23 +52,23 @@ export function extractFromAppStoreConnect(
     extensions: [],
     backgroundModes: [],
     privacyManifest: {
-      hasPrivacyManifest: false, // Cannot check via Connect metadata
-      trackingEnabled: false,
+      hasPrivacyManifest: 'UNKNOWN', // Cannot check via basic Connect metadata
+      trackingEnabled: 'UNKNOWN',
       collectedDataTypes: [],
       accessedApiTypes: []
     },
     security: {
-      atsAllowsArbitraryLoads: false,
-      usesNonExemptEncryptionDeclared: false
+      atsAllowsArbitraryLoads: 'UNKNOWN',
+      usesNonExemptEncryptionDeclared: 'UNKNOWN'
     },
     features: {
       hasInAppPurchases: inAppPurchases.length > 0,
       hasSubscriptions: subscriptionGroups.length > 0,
-      hasThirdPartyAuth: false,
-      hasSignInWithApple: false,
-      hasAccountDeletion: false,
-      hasUserGeneratedContent: false,
-      hasAdvertising: false
+      hasThirdPartyAuth: 'UNKNOWN',
+      hasSignInWithApple: 'UNKNOWN',
+      hasAccountDeletion: 'UNKNOWN',
+      hasUserGeneratedContent: 'UNKNOWN',
+      hasAdvertising: 'UNKNOWN'
     },
     metadata: {
       name,
@@ -78,7 +78,7 @@ export function extractFromAppStoreConnect(
       supportUrl: undefined, // Connect API doesn't expose support URL in basic response
       category,
       ageRating: normalizedAgeRating,
-      listingProvided: true
+      listingProvided: false
     },
     screenshots: [], // Screenshot scanning is not supported via basic App Store Connect API lookup
     rawInfo: details

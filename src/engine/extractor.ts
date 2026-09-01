@@ -254,12 +254,8 @@ function buildInspection(
     });
   }
 
-  const metadataProvided = !!(
-    materials?.privacyPolicyUrl ||
-    materials?.description ||
-    materials?.subtitle ||
-    materials?.keywords
-  );
+  const hasBinaryData = !!(bundleId && (permissions.length > 0 || Object.keys(info).length > 0));
+  const isPureListingOnly = !hasBinaryData;
 
   return {
     bundleId,
@@ -306,7 +302,7 @@ function buildInspection(
       category: materials?.category || '',
       ageRating: '',
       reviewerNotes: materials?.reviewerNotes || '',
-      listingProvided: metadataProvided
+      listingProvided: isPureListingOnly
     },
     screenshots: materials?.screenshots || [],
     rawInfo: {

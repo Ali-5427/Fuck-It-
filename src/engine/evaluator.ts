@@ -69,6 +69,16 @@ function evaluateRule(ruleId: string, inspection: NormalizedAppInspection, ruleW
 
   switch (ruleId) {
     case 'RULE-PRIV-01': {
+      if (inspection.privacyManifest.hasPrivacyManifest === 'UNKNOWN') {
+        return {
+          triggered: true,
+          severity: 'MANUAL_CHECK',
+          evidence: [evidence('PrivacyInfo.xcprivacy', 'App Store Connect / Build scan', 'UNKNOWN', 'Privacy manifest presence cannot be verified via App Store Connect metadata.')],
+          why: 'Apple expects apps to declare data collection and Required Reason API usage in a privacy manifest.',
+          action: 'Add a PrivacyInfo.xcprivacy file to the app target and declare collected data types plus Required Reason APIs you actually use.',
+          verify: 'In Xcode, confirm PrivacyInfo.xcprivacy is in the app target’s Copy Bundle Resources.'
+        };
+      }
       if (!inspection.privacyManifest.hasPrivacyManifest) {
         return {
           triggered: true,
@@ -117,6 +127,16 @@ function evaluateRule(ruleId: string, inspection: NormalizedAppInspection, ruleW
 
     case 'RULE-PRIV-03': {
       const att = inspection.permissions.find(p => p.key === 'NSUserTrackingUsageDescription');
+      if (inspection.features.hasAdvertising === 'UNKNOWN' || inspection.privacyManifest.trackingEnabled === 'UNKNOWN') {
+        return {
+          triggered: true,
+          severity: 'MANUAL_CHECK',
+          evidence: [evidence('NSUserTrackingUsageDescription', 'App Store Connect / Ad Tracking', 'UNKNOWN', 'Ad tracking and ATT configuration cannot be determined from basic App Store Connect info.')],
+          why: 'If the app tracks users across apps or sites, Apple expects an ATT prompt with a clear purpose string.',
+          action: 'If you collect IDFA or track users across third-party apps/websites, provide NSUserTrackingUsageDescription in Info.plist.',
+          verify: 'Confirm whether AdMob, AppsFlyer, or IDFA tracking is used.'
+        };
+      }
       if (inspection.features.hasAdvertising || inspection.privacyManifest.trackingEnabled) {
         if (!att?.detected || !att.description.trim()) {
           return {
@@ -163,6 +183,16 @@ function evaluateRule(ruleId: string, inspection: NormalizedAppInspection, ruleW
     }
 
     case 'RULE-ACC-01': {
+      if (inspection.features.hasAccountDeletion === 'UNKNOWN' || inspection.features.hasThirdPartyAuth === 'UNKNOWN' || inspection.features.hasSignInWithApple === 'UNKNOWN') {
+        return {
+          triggered: true,
+          severity: 'MANUAL_CHECK',
+          evidence: [evidence('Account deletion', 'Account requirements', 'UNKNOWN', 'Account system configuration cannot be confirmed from App Store Connect metadata. If users can create accounts, in-app account deletion is mandatory.')],
+          why: 'If people can create an account, Apple expects a way to delete the account and associated data from inside the app.',
+          action: 'Add a clear Delete Account flow in settings (not only an email link), and confirm it actually deletes the account.',
+          verify: 'Sign in, open settings, and complete deletion on a test account.'
+        };
+      }
       const hasAccounts = inspection.features.hasThirdPartyAuth || inspection.features.hasSignInWithApple;
       if (!hasAccounts) return empty;
       return {
@@ -176,6 +206,16 @@ function evaluateRule(ruleId: string, inspection: NormalizedAppInspection, ruleW
     }
 
     case 'RULE-ACC-02': {
+      if (inspection.features.hasThirdPartyAuth === 'UNKNOWN' || inspection.features.hasSignInWithApple === 'UNKNOWN') {
+        return {
+          triggered: true,
+          severity: 'MANUAL_CHECK',
+          evidence: [evidence('Third-party login', 'Authentication', 'UNKNOWN', 'Third-party login usage cannot be determined from App Store Connect metadata. If third-party login is used, Sign in with Apple must also be offered.')],
+          why: 'If the app uses a third-party social login, Apple also expects Sign in with Apple as an equivalent option.',
+          action: 'Add Sign in with Apple next to the other social login buttons, using AuthenticationServices.',
+          verify: 'Open the login screen and confirm Apple appears as a first-class option.'
+        };
+      }
       if (inspection.features.hasThirdPartyAuth && !inspection.features.hasSignInWithApple) {
         return {
           triggered: true,
@@ -189,6 +229,16 @@ function evaluateRule(ruleId: string, inspection: NormalizedAppInspection, ruleW
     }
 
     case 'RULE-ACC-03': {
+      if (inspection.features.hasThirdPartyAuth === 'UNKNOWN' || inspection.features.hasSignInWithApple === 'UNKNOWN') {
+        return {
+          triggered: true,
+          severity: 'MANUAL_CHECK',
+          evidence: [evidence('Login gate', 'Account requirements', 'UNKNOWN', 'Account requirements cannot be determined from App Store Connect metadata. Ensure core features are accessible without mandatory login where feasible.')],
+          why: 'Apple often rejects apps that force account creation before the user can try features that do not need an account.',
+          action: 'Allow browsing or using core utility features without an account, and only require sign-in for sync, cloud, or personal data.',
+          verify: 'Fresh-install the app and see what is usable before any login.'
+        };
+      }
       if (!(inspection.features.hasThirdPartyAuth || inspection.features.hasSignInWithApple)) return empty;
       return {
         triggered: true,
@@ -238,6 +288,16 @@ function evaluateRule(ruleId: string, inspection: NormalizedAppInspection, ruleW
     }
 
     case 'RULE-UGC-01': {
+      if (inspection.features.hasUserGeneratedContent === 'UNKNOWN') {
+        return {
+          triggered: true,
+          severity: 'MANUAL_CHECK',
+          evidence: [evidence('User-generated content', 'UGC moderation', 'UNKNOWN', 'UGC features cannot be confirmed from App Store Connect metadata. If the app hosts user-generated content, moderation and reporting mechanisms are required.')],
+          why: 'Feeds, chat, comments, or user uploads generally need reporting, blocking, and filtering of objectionable content.',
+          action: 'Add report and block actions on user content, plus filtering and a way to contact you about abuse.',
+          verify: 'Create two test accounts and walk through report and block.'
+        };
+      }
       if (!inspection.features.hasUserGeneratedContent) return empty;
       return {
         triggered: true,
@@ -252,6 +312,19 @@ function evaluateRule(ruleId: string, inspection: NormalizedAppInspection, ruleW
     case 'RULE-COMP-01': {
       const needsLogin = inspection.features.hasThirdPartyAuth || inspection.features.hasSignInWithApple;
       const notes = inspection.metadata.reviewerNotes?.trim() || '';
+      if (inspection.features.hasThirdPartyAuth === 'UNKNOWN' || inspection.features.hasSignInWithApple === 'UNKNOWN') {
+        if (notes.length < 8) {
+          return {
+            triggered: true,
+            severity: 'MANUAL_CHECK',
+            evidence: [evidence('Reviewer notes', 'Submission info', 'UNKNOWN', 'Account requirement cannot be confirmed from App Store Connect metadata and no reviewer notes or demo credentials were provided.')],
+            why: 'If App Review cannot reach core features without an account, they need a working demo login in Review Information.',
+            action: 'Create a durable test account, put username and password in App Store Connect Review Information, and include any 2FA bypass steps.',
+            verify: 'Log in with those credentials on a clean install before you submit.'
+          };
+        }
+        return empty;
+      }
       if (!needsLogin) return empty;
       if (notes.length < 8) {
         return {
@@ -372,7 +445,17 @@ function evaluateRule(ruleId: string, inspection: NormalizedAppInspection, ruleW
     }
 
     case 'RULE-SEC-01': {
-      if (inspection.security.usesNonExemptEncryptionDeclared) return empty;
+      if (inspection.security.usesNonExemptEncryptionDeclared === true) return empty;
+      if (inspection.security.usesNonExemptEncryptionDeclared === 'UNKNOWN') {
+        return {
+          triggered: true,
+          severity: 'MANUAL_CHECK',
+          evidence: [evidence('ITSAppUsesNonExemptEncryption', 'App Store Connect / Info.plist', 'UNKNOWN', 'Export compliance status cannot be determined from basic App Store Connect info.')],
+          why: 'If you only use standard HTTPS / system encryption, declaring this key avoids a repeated compliance question.',
+          action: 'Declare ITSAppUsesNonExemptEncryption = false in Info.plist or answer export compliance questions in App Store Connect.',
+          verify: 'Confirm you are not using custom crypto beyond HTTPS and Apple’s APIs.'
+        };
+      }
       return {
         triggered: true,
         evidence: [evidence('ITSAppUsesNonExemptEncryption', 'Info.plist', 'NOT_DETECTED', 'Export compliance key is missing. App Store Connect will ask about encryption on every upload.')],
@@ -383,6 +466,16 @@ function evaluateRule(ruleId: string, inspection: NormalizedAppInspection, ruleW
     }
 
     case 'RULE-SEC-02': {
+      if (inspection.security.atsAllowsArbitraryLoads === 'UNKNOWN') {
+        return {
+          triggered: true,
+          severity: 'MANUAL_CHECK',
+          evidence: [evidence('NSAllowsArbitraryLoads', 'App Transport Security', 'UNKNOWN', 'ATS configuration cannot be determined from App Store Connect metadata.')],
+          why: 'Open ATS exceptions are hard to justify. Reviewers expect HTTPS unless a specific domain needs an exception.',
+          action: 'Ensure NSAllowsArbitraryLoads is disabled in Info.plist and use HTTPS.',
+          verify: 'Confirm your app connects exclusively via secure HTTPS.'
+        };
+      }
       if (!inspection.security.atsAllowsArbitraryLoads) return empty;
       return {
         triggered: true,
@@ -492,8 +585,10 @@ export function evaluateInspection(
   const copy = readinessCopy(readinessStatus);
   const summary = `${copy.summaryHint} ${highCount} high, ${medCount} medium, ${lowCount} low, ${manualCount} manual check${manualCount === 1 ? '' : 's'}. ${passedChecks.length} check${passedChecks.length === 1 ? '' : 's'} looked clear in this run.`;
 
-  const siwaLine = inspection.features.hasSignInWithApple
+  const siwaLine = inspection.features.hasSignInWithApple === true
     ? '- Sign in with Apple appears to be present in the build scan.'
+    : inspection.features.hasSignInWithApple === 'UNKNOWN'
+    ? '- Sign in with Apple status: not determined from Connect metadata.'
     : '- Sign in with Apple was not detected in this scan.';
   const privacyLine = inspection.metadata.privacyPolicyUrl
     ? `- Privacy Policy: ${inspection.metadata.privacyPolicyUrl}`

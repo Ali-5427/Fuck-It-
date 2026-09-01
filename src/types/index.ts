@@ -160,25 +160,25 @@ export interface NormalizedAppInspection {
   extensions: string[];
   backgroundModes: string[];
   privacyManifest: {
-    hasPrivacyManifest: boolean;
-    trackingEnabled: boolean;
+    hasPrivacyManifest: boolean | 'UNKNOWN';
+    trackingEnabled: boolean | 'UNKNOWN';
     collectedDataTypes: string[];
     accessedApiTypes: string[];
   };
   security: {
-    atsAllowsArbitraryLoads: boolean;
-    usesNonExemptEncryptionDeclared: boolean;
+    atsAllowsArbitraryLoads: boolean | 'UNKNOWN';
+    usesNonExemptEncryptionDeclared: boolean | 'UNKNOWN';
     usesNonExemptEncryptionValue?: boolean;
   };
   features: {
-    hasInAppPurchases: boolean;
-    hasSubscriptions: boolean;
-    hasThirdPartyAuth: boolean;
-    hasSignInWithApple: boolean;
-    hasAccountDeletion: boolean;
-    hasUserGeneratedContent: boolean;
-    hasAdvertising: boolean;
-    hasExternalPayments?: boolean;
+    hasInAppPurchases: boolean | 'UNKNOWN';
+    hasSubscriptions: boolean | 'UNKNOWN';
+    hasThirdPartyAuth: boolean | 'UNKNOWN';
+    hasSignInWithApple: boolean | 'UNKNOWN';
+    hasAccountDeletion: boolean | 'UNKNOWN';
+    hasUserGeneratedContent: boolean | 'UNKNOWN';
+    hasAdvertising: boolean | 'UNKNOWN';
+    hasExternalPayments?: boolean | 'UNKNOWN';
   };
   metadata: {
     name?: string;

@@ -93,23 +93,23 @@ export async function extractFromItunesLookup(appNameOrId: string): Promise<Norm
       extensions: [],
       backgroundModes: [],
       privacyManifest: {
-        hasPrivacyManifest: false, // Cannot detect from iTunes
-        trackingEnabled: false,
+        hasPrivacyManifest: 'UNKNOWN', // Cannot detect from iTunes
+        trackingEnabled: 'UNKNOWN',
         collectedDataTypes: [],
         accessedApiTypes: []
       },
       security: {
-        atsAllowsArbitraryLoads: false,
-        usesNonExemptEncryptionDeclared: false
+        atsAllowsArbitraryLoads: 'UNKNOWN',
+        usesNonExemptEncryptionDeclared: 'UNKNOWN'
       },
       features: {
-        hasInAppPurchases: false,
-        hasSubscriptions: false,
-        hasThirdPartyAuth: false,
-        hasSignInWithApple: false,
-        hasAccountDeletion: false,
-        hasUserGeneratedContent: false,
-        hasAdvertising: false
+        hasInAppPurchases: 'UNKNOWN',
+        hasSubscriptions: 'UNKNOWN',
+        hasThirdPartyAuth: 'UNKNOWN',
+        hasSignInWithApple: 'UNKNOWN',
+        hasAccountDeletion: 'UNKNOWN',
+        hasUserGeneratedContent: 'UNKNOWN',
+        hasAdvertising: 'UNKNOWN'
       },
       metadata: {
         name: app.trackName,
