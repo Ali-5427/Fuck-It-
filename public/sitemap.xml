@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://app.example.com/</loc></url>
+  <url><loc>https://app.example.com/privacy</loc></url>
+  <url><loc>https://app.example.com/terms</loc></url>
+  <url><loc>https://app.example.com/cookies</loc></url>
+  <url><loc>https://app.example.com/refunds</loc></url>
+</urlset>
