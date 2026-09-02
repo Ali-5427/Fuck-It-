@@ -339,8 +339,12 @@ export default function App() {
         {uploadModalOpen && (
           <UploadModal
             isOpen={uploadModalOpen}
-            onClose={() => setUploadModalOpen(false)}
+            onClose={() => {
+              setUploadModalOpen(false);
+              setUploadTargetApp(null);
+            }}
             onAuditCompleted={handleAuditCompleted}
+            targetApp={uploadTargetApp}
           />
         )}
 
@@ -550,8 +554,12 @@ export default function App() {
         {uploadModalOpen && (
           <UploadModal
             isOpen={uploadModalOpen}
-            onClose={() => setUploadModalOpen(false)}
+            onClose={() => {
+              setUploadModalOpen(false);
+              setUploadTargetApp(null);
+            }}
             onAuditCompleted={handleAuditCompleted}
+            targetApp={uploadTargetApp}
           />
         )}
 

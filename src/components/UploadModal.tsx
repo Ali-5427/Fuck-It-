@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Upload, 
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { extractAppArtifact, parseInspectionData } from '../engine/extractor';
 import { store } from '../services/store';
-import { NormalizedAppInspection } from '../types';
+import { NormalizedAppInspection, Application } from '../types';
 import { useScrollLock } from '../hooks/useScrollLock';
 
 interface UploadModalProps {
@@ -39,6 +39,14 @@ export const UploadModal: React.FC<UploadModalProps> = ({
   const [customAppName, setCustomAppName] = useState(targetApp?.name || '');
   const [customBundleId, setCustomBundleId] = useState(targetApp?.bundleId || '');
   const [customCategory, setCustomCategory] = useState(targetApp?.primaryCategory || 'Utilities');
+
+  useEffect(() => {
+    if (targetApp) {
+      setCustomAppName(targetApp.name);
+      setCustomBundleId(targetApp.bundleId);
+      setCustomCategory(targetApp.primaryCategory || 'Utilities');
+    }
+  }, [targetApp]);
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);

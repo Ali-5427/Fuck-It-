@@ -21,8 +21,9 @@ import {
 } from 'lucide-react';
 import { Application, AuditRun, Finding, FindingStatus, RuleCategory } from '../types';
 import { store } from '../services/store';
-import { compareAudits } from '../engine/evaluator';
+import { compareAudits, evaluateInspection } from '../engine/evaluator';
 import { extractFromItunesLookup } from '../engine/itunesExtractor';
+import { apiClient } from '../services/api';
 
 interface AuditViewProps {
   app: Application | null;
