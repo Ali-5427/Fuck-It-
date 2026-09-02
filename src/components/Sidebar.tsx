@@ -17,6 +17,7 @@ import {
   FileText
 } from 'lucide-react';
 import { store } from '../services/store';
+import { authService } from '../services/authService';
 import { Application, User } from '../types';
 import { useScrollLock } from '../hooks/useScrollLock';
 
@@ -44,8 +45,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   useScrollLock(isMobileOpen);
 
-  const handleSignOut = () => {
-    store.logout();
+  const handleSignOut = async () => {
+    try {
+      await authService.signOut();
+    } catch (err) {
+      console.warn('Sidebar signout warning:', err);
+      store.logout();
+    }
     onNavigate('landing');
   };
 

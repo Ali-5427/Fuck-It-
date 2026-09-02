@@ -111,9 +111,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsLoading(true);
     setErrorMsg(null);
     try {
-      await authService.signInWithGoogle();
-      if (onSuccess) onSuccess();
-      onClose();
+      const loggedInUser = await authService.signInWithGoogle();
+      if (loggedInUser) {
+        if (onSuccess) onSuccess();
+        onClose();
+      }
     } catch (err: any) {
       console.error('Google sign-in error:', err);
       if (err.code !== 'auth/popup-closed-by-user') {

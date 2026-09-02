@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { siteConfig } from '../config/site';
+import { authService } from '../services/authService';
+import { ShieldCheck, CheckCircle2, Lock, ArrowRight, Key, Loader2, AlertCircle } from 'lucide-react';
 
 type LegalPage = 'privacy' | 'terms' | 'dpa' | 'cookies' | 'refunds';
 
@@ -290,7 +292,7 @@ const pages: Record<LegalPage, { title: string; lastUpdated: string; intro: stri
           <>
             <p>Fixit uses the following categories of sub-processors to deliver its service:</p>
             <ul>
-              <li><strong>Cloud Infrastructure:</strong> Hosting and storage providers (e.g., Google Cloud Platform, Firebase).</li>
+              <li><strong>Cloud Infrastructure:</strong> Hosting, database, and storage providers (e.g., InsForge, Google Cloud Platform).</li>
               <li><strong>Payment Processing:</strong> Stripe, Inc. for secure billing.</li>
               <li><strong>Error Monitoring:</strong> Application performance and error tracking providers.</li>
               <li><strong>Email Delivery:</strong> Transactional email service providers.</li>
@@ -540,6 +542,202 @@ export const NotFoundPage: React.FC = () => (
     </a>
   </PublicLayout>
 );
+
+export const ResetPasswordPage: React.FC = () => {
+  const [email, setEmail] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [requestSent, setRequestSent] = useState(false);
+
+  useEffect(() => {
+    // Detect token/otp in URL query or hash
+    const params = new URLSearchParams(window.location.search);
+    const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const tokenFromUrl = params.get('otp') || params.get('token') || params.get('code') || hashParams.get('access_token') || hashParams.get('token');
+    const emailFromUrl = params.get('email');
+    if (tokenFromUrl) setOtp(tokenFromUrl);
+    if (emailFromUrl) setEmail(emailFromUrl);
+  }, []);
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!otp) {
+      setErrorMsg('Please enter the verification code or token sent to your email.');
+      return;
+    }
+    if (!newPassword || newPassword.length < 6) {
+      setErrorMsg('New password must be at least 6 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setErrorMsg('Passwords do not match.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authService.resetPasswordWithOtp(newPassword, otp);
+      setSuccessMsg('Your password has been successfully updated. You can now sign in to Fixit.');
+    } catch (err: any) {
+      console.error('Password reset failed:', err);
+      setErrorMsg(err.message || 'Failed to reset password. The code may be invalid or expired.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendResetEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    if (!email) {
+      setErrorMsg('Please enter your developer account email.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await authService.sendPasswordReset(email);
+      setRequestSent(true);
+      setSuccessMsg(`Password reset instructions sent to ${email}. Check your inbox for the reset link or code.`);
+    } catch (err: any) {
+      console.error('Failed to send reset email:', err);
+      setErrorMsg(err.message || 'Could not send reset email. Please verify your address.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <PublicLayout title="Reset Your Password" lastUpdated="">
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs max-w-lg space-y-6">
+        {successMsg ? (
+          <div className="space-y-4 text-center py-4">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+              <CheckCircle2 className="h-6 w-6" />
+            </div>
+            <h3 className="text-lg font-bold text-slate-900">Password Updated</h3>
+            <p className="text-sm text-slate-600">{successMsg}</p>
+            <a
+              href="/"
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-bold text-white shadow-xs hover:bg-blue-700 transition-colors"
+            >
+              <span>Launch Fixit</span>
+              <ArrowRight className="h-4 w-4" />
+            </a>
+          </div>
+        ) : (
+          <>
+            {errorMsg && (
+              <div className="flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <span>{errorMsg}</span>
+              </div>
+            )}
+
+            {otp ? (
+              <form onSubmit={handleResetPassword} className="space-y-4">
+                <p className="text-xs text-slate-600">
+                  Enter your new password below to complete the account recovery.
+                </p>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Verification Code / OTP</label>
+                  <input
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    required
+                    placeholder="Enter reset code or token"
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs font-mono focus:border-blue-500 focus:bg-white focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">New Password</label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    placeholder="Minimum 6 characters"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs focus:border-blue-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Confirm New Password</label>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    placeholder="Confirm new password"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs focus:border-blue-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+                >
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <span>Set New Password</span>
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleSendResetEmail} className="space-y-4">
+                <p className="text-xs text-slate-600">
+                  Enter your email address and we will send you a verification link and code to securely reset your password.
+                </p>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-slate-700">Developer Email</label>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    placeholder="developer@company.com"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2 text-xs focus:border-blue-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 cursor-pointer"
+                >
+                  {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+                  <span>Send Reset Code</span>
+                </button>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setOtp('manual')}
+                    className="text-xs text-blue-600 hover:underline font-medium cursor-pointer"
+                  >
+                    Already have a reset code? Enter code manually
+                  </button>
+                </div>
+              </form>
+            )}
+          </>
+        )}
+      </div>
+    </PublicLayout>
+  );
+};
 
 const PublicLayout: React.FC<{ title: string; lastUpdated: string; children: React.ReactNode }> = ({ title, lastUpdated, children }) => (
   <main className="mx-auto min-h-screen max-w-4xl px-6 py-10 sm:py-16">

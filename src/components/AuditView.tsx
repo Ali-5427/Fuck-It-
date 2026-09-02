@@ -22,13 +22,14 @@ import {
 import { Application, AuditRun, Finding, FindingStatus, RuleCategory } from '../types';
 import { store } from '../services/store';
 import { compareAudits } from '../engine/evaluator';
+import { extractFromItunesLookup } from '../engine/itunesExtractor';
 
 interface AuditViewProps {
   app: Application | null;
   audit: AuditRun | null;
   auditsHistory: AuditRun[];
   onSelectFinding: (finding: Finding) => void;
-  onOpenUpload: () => void;
+  onOpenUpload: (appId?: string) => void;
   onGenerateReport: () => void;
   onOpenDiff: (comparison: any) => void;
   isTryNow?: boolean;
@@ -59,7 +60,7 @@ export const AuditView: React.FC<AuditViewProps> = ({
         <h2 className="text-xl font-bold text-slate-900">No Application Selected</h2>
         <p className="text-xs text-slate-600">Select an application from your dashboard or upload a new build to run the preflight audit engine.</p>
         <button
-          onClick={onOpenUpload}
+          onClick={() => onOpenUpload()}
           className="rounded-xl bg-blue-600 hover:bg-blue-700 px-5 py-2.5 text-xs font-bold text-white font-mono transition-colors cursor-pointer shadow-sm"
         >
           Upload iOS Build
@@ -69,12 +70,41 @@ export const AuditView: React.FC<AuditViewProps> = ({
   }
 
   const handleReRunAudit = async () => {
+    if (!app || !audit) return;
+
+    if (audit.auditType === 'BINARY_SCAN') {
+      // Recheck of a BINARY_SCAN app MUST require a new IPA/ZIP/plist upload
+      onOpenUpload(app.id);
+      return;
+    }
+
+    // Recheck of a LISTING_SCAN / CONNECT_SCAN / Try Now app MUST re-fetch live data
     setIsRechecking(true);
     try {
-      const nextBuild = String(Number(audit.buildNumber) + 1 || '2');
-      const { audit: newAudit, comparison } = await store.runNewAudit(app.id, nextBuild);
-      if (comparison) {
-        onOpenDiff(comparison);
+      if (audit.auditType === 'LISTING_SCAN' || isTryNow) {
+        const liveInspection = await extractFromItunesLookup(app.bundleId || app.name);
+        if (liveInspection) {
+          const { audit: newAudit, comparison } = await store.runNewAudit(
+            app.id,
+            liveInspection.build || app.currentBuild,
+            liveInspection.version || app.currentVersion,
+            liveInspection
+          );
+          if (comparison) {
+            onOpenDiff(comparison);
+          }
+        } else {
+          // Re-evaluate with current inspection
+          const { audit: newAudit, comparison } = await store.runNewAudit(app.id);
+          if (comparison) {
+            onOpenDiff(comparison);
+          }
+        }
+      } else if (audit.auditType === 'CONNECT_SCAN') {
+        const { audit: newAudit, comparison } = await store.runNewAudit(app.id);
+        if (comparison) {
+          onOpenDiff(comparison);
+        }
       }
     } catch (e) {
       console.error('Error re-running audit:', e);
@@ -257,8 +287,17 @@ export const AuditView: React.FC<AuditViewProps> = ({
                 disabled={isRechecking}
                 className="flex items-center gap-1.5 rounded-xl bg-white hover:bg-slate-100 px-3.5 py-2 text-xs font-bold text-slate-700 border border-slate-300 transition-colors font-mono disabled:opacity-50 cursor-pointer shadow-sm"
               >
-                <RefreshCw className={`h-3.5 w-3.5 ${isRechecking ? 'animate-spin text-blue-600' : 'text-slate-600'}`} />
-                <span>{isRechecking ? 'Auditing...' : 'Re-run Preflight'}</span>
+                {audit.auditType === 'BINARY_SCAN' ? (
+                  <>
+                    <Upload className="h-3.5 w-3.5 text-blue-600" />
+                    <span>Upload New Build to Recheck</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className={`h-3.5 w-3.5 ${isRechecking ? 'animate-spin text-blue-600' : 'text-slate-600'}`} />
+                    <span>{isRechecking ? 'Re-fetching & Auditing...' : 'Re-fetch & Audit'}</span>
+                  </>
+                )}
               </button>
 
               <button

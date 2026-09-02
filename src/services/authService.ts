@@ -130,12 +130,14 @@ export class AuthService {
   }
 
   // Google OAuth Sign-in
-  public async signInWithGoogle(): Promise<User> {
+  public async signInWithGoogle(): Promise<User | null> {
     const { data, error } = await insforge.auth.signInWithOAuth('google', {
       redirectTo: window.location.origin,
     });
     if (error) throw error;
-    return {} as User;
+    // Wait for real profile sync before treating login as success
+    const syncedUser = await this.syncCurrentUser();
+    return syncedUser || this.currentUser;
   }
 
   // Email & Password Registration
@@ -226,12 +228,26 @@ export class AuthService {
     if (error) throw error;
   }
 
+  // Complete Password Reset with OTP / Token
+  public async resetPasswordWithOtp(newPassword: string, otp: string): Promise<void> {
+    const { error } = await insforge.auth.resetPassword({
+      newPassword,
+      otp,
+    });
+    if (error) throw error;
+  }
+
   // Sign Out
   public async signOut(): Promise<void> {
-    const { error } = await insforge.auth.signOut();
-    if (error) throw error;
-    this.currentUser = null;
-    store.setUser(null);
+    try {
+      const { error } = await insforge.auth.signOut();
+      if (error) console.warn('InsForge signOut notice:', error);
+    } catch (err) {
+      console.warn('Sign out caught error:', err);
+    } finally {
+      this.currentUser = null;
+      store.setUser(null);
+    }
   }
 
   // Sync profile updates to InsForge

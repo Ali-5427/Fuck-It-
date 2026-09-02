@@ -539,7 +539,9 @@ export function evaluateInspection(
     const existing = existingStatusMap.get(rule.id);
     const severity = result.severity || rule.severity;
     const stillOpen = severity === 'MANUAL_CHECK' ? 'MANUAL_REVIEW' : 'OPEN';
-    const status = existing?.status || stillOpen;
+    // When a rule triggers on the new inspection, status MUST reset to OPEN / MANUAL_REVIEW.
+    // We carry forward existing notes and history, but never carry a false FIXED status when the issue is still present.
+    const status = stillOpen;
 
     findings.push({
       id: existing?.id || `finding_${rule.id}_${Math.random().toString(36).slice(2, 7)}`,

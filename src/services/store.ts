@@ -215,12 +215,34 @@ class AppStore {
 
   private persist() {
     try {
-      localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(this.user));
-      localStorage.setItem(STORAGE_KEYS.APPS, JSON.stringify(this.apps));
-      localStorage.setItem(STORAGE_KEYS.AUDITS, JSON.stringify(this.auditsMap));
-      localStorage.setItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify(this.inspectionsMap));
+      if (this.user) {
+        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(this.user));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.USER);
+      }
+
+      if (this.apps.length > 0) {
+        localStorage.setItem(STORAGE_KEYS.APPS, JSON.stringify(this.apps));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.APPS);
+      }
+
+      if (Object.keys(this.auditsMap).length > 0) {
+        localStorage.setItem(STORAGE_KEYS.AUDITS, JSON.stringify(this.auditsMap));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.AUDITS);
+      }
+
+      if (Object.keys(this.inspectionsMap).length > 0) {
+        localStorage.setItem(STORAGE_KEYS.INSPECTIONS, JSON.stringify(this.inspectionsMap));
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.INSPECTIONS);
+      }
+
       if (this.selectedAppId) {
         localStorage.setItem(STORAGE_KEYS.SELECTED_APP, this.selectedAppId);
+      } else {
+        localStorage.removeItem(STORAGE_KEYS.SELECTED_APP);
       }
     } catch (e) {
       console.warn('Storage persistence warning:', e);
@@ -288,6 +310,14 @@ class AppStore {
   public setUser(user: User | null) {
     const prevUser = this.user;
     this.user = user;
+    if (!user) {
+      // On sign-out, drop user AND that user's cached workspace
+      this.apps = [];
+      this.auditsMap = {};
+      this.inspectionsMap = {};
+      this.selectedAppId = null;
+      this.activeAuditId = null;
+    }
     this.persist();
     if (user && (!prevUser || prevUser.id !== user.id)) {
       this.syncFromDatabase();
@@ -296,6 +326,11 @@ class AppStore {
 
   public logout() {
     this.user = null;
+    this.apps = [];
+    this.auditsMap = {};
+    this.inspectionsMap = {};
+    this.selectedAppId = null;
+    this.activeAuditId = null;
     this.persist();
   }
 
@@ -622,8 +657,8 @@ class AppStore {
 
     const previousAudit = this.getLatestAudit(appId);
 
-    const version = newVersion || app.currentVersion;
-    const build = newBuildNumber || String(Number(app.currentBuild) + 1 || '2');
+    const version = newVersion || updatedInspection?.version || app.currentVersion || '1.0.0';
+    const build = newBuildNumber || updatedInspection?.build || app.currentBuild || '1';
 
     let inspection = updatedInspection || this.inspectionsMap[appId];
     if (updatedInspection) {

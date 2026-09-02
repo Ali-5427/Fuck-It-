@@ -5,7 +5,7 @@ import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { CookieConsent } from './components/CookieConsent';
 import { ConnectionNotice } from './components/ConnectionNotice';
-import { LegalPageView, NotFoundPage } from './components/PublicPages';
+import { LegalPageView, NotFoundPage, ResetPasswordPage } from './components/PublicPages';
 import { SiteFooter } from './components/SiteFooter';
 
 const rootElement = document.getElementById('root');
@@ -20,7 +20,13 @@ if (rootElement) {
     '/refunds': 'refunds'
   } as const;
   const legalPage = legalPages[path as keyof typeof legalPages];
-  const page = legalPage ? <LegalPageView page={legalPage} /> : path === '/' ? <App /> : <NotFoundPage />;
+  const page = legalPage 
+    ? <LegalPageView page={legalPage} /> 
+    : path === '/reset-password' 
+      ? <ResetPasswordPage /> 
+      : path === '/' 
+        ? <App /> 
+        : <NotFoundPage />;
 
   ReactDOM.createRoot(rootElement).render(
     <React.StrictMode>

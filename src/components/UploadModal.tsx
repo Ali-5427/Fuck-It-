@@ -21,22 +21,24 @@ import { useScrollLock } from '../hooks/useScrollLock';
 interface UploadModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onAuditCompleted: (appId: string, auditId: string) => void;
+  onAuditCompleted: (appId: string, auditId: string, comparison?: any) => void;
+  targetApp?: Application | null;
 }
 
 export const UploadModal: React.FC<UploadModalProps> = ({
   isOpen,
   onClose,
-  onAuditCompleted
+  onAuditCompleted,
+  targetApp
 }) => {
   useScrollLock(isOpen);
   const [activeTab, setActiveTab] = useState<'file' | 'plist'>('file');
   const [isDragging, setIsDragging] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [rawPlistText, setRawPlistText] = useState('');
-  const [customAppName, setCustomAppName] = useState('');
-  const [customBundleId, setCustomBundleId] = useState('');
-  const [customCategory, setCustomCategory] = useState('Utilities');
+  const [customAppName, setCustomAppName] = useState(targetApp?.name || '');
+  const [customBundleId, setCustomBundleId] = useState(targetApp?.bundleId || '');
+  const [customCategory, setCustomCategory] = useState(targetApp?.primaryCategory || 'Utilities');
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -73,9 +75,11 @@ export const UploadModal: React.FC<UploadModalProps> = ({
 
   const handleFileSelected = (selectedFile: File) => {
     setFile(selectedFile);
-    const inferredName = selectedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
-    setCustomAppName(inferredName);
-    setCustomBundleId('');
+    if (!targetApp) {
+      const inferredName = selectedFile.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      setCustomAppName(inferredName);
+      setCustomBundleId('');
+    }
     setErrorMsg(null);
   };
 
@@ -87,48 +91,66 @@ export const UploadModal: React.FC<UploadModalProps> = ({
       // Step 1: Validation
       setProgressStep(1);
       setProcessingStatusText('Decompressing payload and verifying iOS target structure...');
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 500));
 
       // Step 2: Plist & Privacy Manifest extraction
       setProgressStep(2);
       setProcessingStatusText('Inspecting Info.plist purpose strings & PrivacyInfo.xcprivacy...');
-      await new Promise(r => setTimeout(r, 700));
+      await new Promise(r => setTimeout(r, 600));
 
       // Step 3: Framework & symbol scanning
       setProgressStep(3);
       setProcessingStatusText('Scanning framework signatures (StoreKit, Social Auth, Ads, ATS)...');
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 500));
 
       // Step 4: Deterministic rule engine
       setProgressStep(4);
       setProcessingStatusText('Evaluating against 35+ Apple App Store Review Guidelines...');
-      await new Promise(r => setTimeout(r, 700));
+      await new Promise(r => setTimeout(r, 600));
 
       // Step 5: Gemini AI Correlation & Review Notes Draft
       setProgressStep(5);
       setProcessingStatusText('Drafting App Store Connect Reviewer Notes and remediation guidance...');
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 700));
 
-      // Register or update app in store
-      const app = store.createApp({
-        name: appName || inspection.appName,
-        bundleId: bundleId || inspection.bundleId,
-        primaryCategory: customCategory || inspection.metadata.category || 'Utilities',
-        currentVersion: inspection.version,
-        currentBuild: inspection.build,
-        inspection
-      });
+      if (targetApp) {
+        // Recheck of existing binary scan app with real new inspection data
+        const { audit: newAudit, comparison } = await store.runNewAudit(
+          targetApp.id,
+          inspection.build,
+          inspection.version,
+          inspection
+        );
 
-      const latestAudit = store.getLatestAudit(app.id);
+        setProgressStep(6);
+        setProcessingStatusText('Recheck complete! Loading audit comparison...');
+        await new Promise(r => setTimeout(r, 300));
 
-      setProgressStep(6);
-      setProcessingStatusText('Inspection complete! Loading audit dashboard...');
-      await new Promise(r => setTimeout(r, 400));
+        setIsProcessing(false);
+        onClose();
+        onAuditCompleted(targetApp.id, newAudit.id, comparison);
+      } else {
+        // Register or update app in store
+        const app = store.createApp({
+          name: appName || inspection.appName,
+          bundleId: bundleId || inspection.bundleId,
+          primaryCategory: customCategory || inspection.metadata.category || 'Utilities',
+          currentVersion: inspection.version,
+          currentBuild: inspection.build,
+          inspection
+        });
 
-      setIsProcessing(false);
-      onClose();
-      if (latestAudit) {
-        onAuditCompleted(app.id, latestAudit.id);
+        const latestAudit = store.getLatestAudit(app.id);
+
+        setProgressStep(6);
+        setProcessingStatusText('Inspection complete! Loading audit dashboard...');
+        await new Promise(r => setTimeout(r, 300));
+
+        setIsProcessing(false);
+        onClose();
+        if (latestAudit) {
+          onAuditCompleted(app.id, latestAudit.id);
+        }
       }
     } catch (err: any) {
       console.error('Extraction error:', err);
@@ -186,8 +208,12 @@ export const UploadModal: React.FC<UploadModalProps> = ({
               <Upload className="h-5 w-5" />
             </div>
             <div>
-              <h3 className="font-bold text-slate-900 text-base">Run Preflight App Store Audit</h3>
-              <p className="text-xs text-slate-500">Extracts iOS metadata, Info.plist purpose keys, & Privacy Manifests</p>
+              <h3 className="font-bold text-slate-900 text-base">
+                {targetApp ? `Recheck iOS Build — ${targetApp.name}` : 'Run Preflight App Store Audit'}
+              </h3>
+              <p className="text-xs text-slate-500">
+                {targetApp ? 'Upload a new IPA/ZIP archive or updated Info.plist to evaluate fixes' : 'Extracts iOS metadata, Info.plist purpose keys, & Privacy Manifests'}
+              </p>
             </div>
           </div>
           {!isProcessing && (

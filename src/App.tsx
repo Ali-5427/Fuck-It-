@@ -46,7 +46,7 @@ export default function App() {
     const unsubscribe = store.subscribe(() => {
       setTick(t => t + 1);
       const currentUser = store.getUser();
-      if (!currentUser && currentView === 'dashboard') {
+      if (!currentUser && currentView !== 'landing') {
         setCurrentView('landing');
       } else if (currentUser && currentView === 'landing') {
         setCurrentView('dashboard');
@@ -71,6 +71,7 @@ export default function App() {
 
   // Modal states
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadTargetApp, setUploadTargetApp] = useState<Application | null>(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState<'login' | 'register' | 'forgot'>('login');
   const [authModalTier, setAuthModalTier] = useState<'free' | 'pro' | 'studio'>('pro');
@@ -186,10 +187,13 @@ export default function App() {
     }
   };
 
-  const handleAuditCompleted = (appId: string, auditId: string) => {
+  const handleAuditCompleted = (appId: string, auditId: string, comparison?: any) => {
     store.selectApp(appId);
     store.setActiveAudit(auditId);
     setCurrentView('audit');
+    if (comparison) {
+      setActiveDiffComparison(comparison);
+    }
   };
 
   const handleConnectAuditCompleted = (inspection: any, auditRun: any) => {
@@ -258,9 +262,13 @@ export default function App() {
                   store.selectApp(appId);
                   setCurrentView('audit');
                 }}
-                onCheckNewApp={() => setUploadModalOpen(true)}
+                onCheckNewApp={() => {
+                  setUploadTargetApp(null);
+                  setUploadModalOpen(true);
+                }}
                 onCheckNewVersion={(appId) => {
-                  store.selectApp(appId);
+                  const a = apps.find(x => x.id === appId);
+                  setUploadTargetApp(a || null);
                   setUploadModalOpen(true);
                 }}
                 onNavigate={(view) => setCurrentView(view)}
@@ -276,7 +284,11 @@ export default function App() {
                 audit={activeAudit}
                 auditsHistory={auditsHistory}
                 onSelectFinding={(f) => setSelectedFinding(f)}
-                onOpenUpload={() => setUploadModalOpen(true)}
+                onOpenUpload={(appId) => {
+                  const a = appId ? apps.find(x => x.id === appId) : selectedApp;
+                  setUploadTargetApp(a || null);
+                  setUploadModalOpen(true);
+                }}
                 onGenerateReport={() => handleGenerateReport()}
                 onOpenDiff={(comp) => setActiveDiffComparison(comp)}
               />

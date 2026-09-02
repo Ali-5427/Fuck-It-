@@ -183,7 +183,7 @@ export const AccountModal: React.FC<AccountModalProps> = ({
     try {
       await authService.updateUserProfile(updates);
     } catch (err) {
-      console.warn('Could not sync user profile update to Firestore:', err);
+      console.warn('Could not sync user profile update to backend:', err);
     }
     triggerSavedSuccess(2500);
   };
@@ -889,7 +889,12 @@ export const AccountModal: React.FC<AccountModalProps> = ({
           <button
             type="button"
             onClick={async () => {
-              await authService.signOut();
+              try {
+                await authService.signOut();
+              } catch (e) {
+                console.warn('Sign out error:', e);
+                store.logout();
+              }
               onClose();
             }}
             className="flex items-center gap-1.5 text-red-600 hover:text-red-700 font-semibold cursor-pointer"
